@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Gemini Float</string>
+    <string name="accessibility_desc">Lets you invoke Gemini Float with an optional double-press volume-down shortcut.</string>
+</resources>
