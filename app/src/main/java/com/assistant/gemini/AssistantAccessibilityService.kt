@@ -172,8 +172,20 @@ class AssistantAccessibilityService : AccessibilityService() {
             override fun onReady() { status("Live · Listening with $model") }
             override fun onEnded(message: String) {
                 mainHandler.post {
-                    if (liveSession != null) endAssistant(message)
-                    else status(message)
+                    // Keep a visible diagnostic on failed handshakes instead of making
+                    // the user guess why the panel vanished or stayed on Connecting.
+                    liveSession = null
+                    val viewNow = panelView
+                    if (viewNow != null) {
+                        panelExpanded = true
+                        viewNow.findViewById<LinearLayout>(R.id.expandedContent).visibility = View.VISIBLE
+                        viewNow.findViewById<TextView>(R.id.btnExpand).text = "↓"
+                        viewNow.findViewById<TextView>(R.id.tvStatus).text = message
+                        viewNow.findViewById<TextView>(R.id.tvResponse).text =
+                            "Gemini Live did not start.\n\n$message\n\nCheck the API key, Live model access, and network, then tap Disconnect and launch again."
+                    } else {
+                        Toast.makeText(this@AssistantAccessibilityService, message, Toast.LENGTH_LONG).show()
+                    }
                 }
             }
         })
