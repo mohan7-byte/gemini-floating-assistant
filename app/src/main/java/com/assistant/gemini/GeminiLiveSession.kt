@@ -1,6 +1,7 @@
 package com.assistant.gemini
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioRecord
@@ -8,7 +9,6 @@ import android.media.AudioTrack
 import android.media.MediaRecorder
 import android.net.Uri
 import android.util.Base64
-import android.graphics.Bitmap
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -22,15 +22,11 @@ import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
-/**
- * One explicit, user-started Gemini Live session. close() tears down the WebSocket,
- * microphone capture and audio playback immediately so the session cannot continue
- * consuming tokens after the user taps Disconnect.
- */
+/** Explicit user-started Gemini Live session. close() stops the socket and audio hardware. */
 class GeminiLiveSession(
     context: Context,
     private val apiKey: String,
-    private val model: String,
+    modelId: String,
     private val callbacks: Callbacks
 ) {
     interface Callbacks {
@@ -40,7 +36,7 @@ class GeminiLiveSession(
         fun onEnded(message: String)
     }
 
-    private val appContext = context.applicationContext
+    private val model = modelId.trim().removePrefix("models/")
     @Volatile private var socket: WebSocket? = null
     @Volatile private var closed = false
     @Volatile private var ready = false
@@ -52,6 +48,7 @@ class GeminiLiveSession(
     @Volatile private var micThread: Thread? = null
     @Volatile private var playbackThread: Thread? = null
 
+    @Suppress("UNUSED_PARAMETER")
     fun connect() {
         if (apiKey.isBlank()) {
             callbacks.onEnded("Add your Google AI Studio API key in settings.")
@@ -59,8 +56,7 @@ class GeminiLiveSession(
         }
         val url = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=" + Uri.encode(apiKey)
         callbacks.onStatus("Connecting to $model…")
-        val request = Request.Builder().url(url).build()
-        socket = client.newWebSocket(request, object : WebSocketListener() {
+        socket = client.newWebSocket(Request.Builder().url(url).build(), object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 if (closed) { webSocket.cancel(); return }
                 val setup = JSONObject().put("setup", JSONObject()
@@ -81,8 +77,8 @@ class GeminiLiveSession(
                 try {
                     val root = JSONObject(text)
                     if (root.has("error")) {
-                        val error = root.optJSONObject("error")?.optString("message").orEmpty()
-                        callbacks.onEnded("Gemini Live error: $error")
+                        val detail = root.optJSONObject("error")?.optString("message").orEmpty()
+                        if (!closed) callbacks.onEnded("Gemini Live error: $detail")
                         close()
                         return
                     }
@@ -94,31 +90,29 @@ class GeminiLiveSession(
                             callbacks.onReady()
                             callbacks.onStatus("Live · Listening with $model")
                         } catch (e: Exception) {
-                            callbacks.onEnded("Could not start microphone/audio: ${e.message ?: "permission or device audio error"}")
+                            callbacks.onEnded("Could not start microphone/audio: ${e.message ?: "permission or audio-device error"}")
                             close()
                         }
                         return
                     }
                     val server = root.optJSONObject("serverContent") ?: return
-                    val inputTranscription = server.optJSONObject("inputTranscription")?.optString("text").orEmpty()
-                    if (inputTranscription.isNotBlank()) callbacks.onTranscript("You: $inputTranscription", false)
-                    val outputTranscription = server.optJSONObject("outputTranscription")?.optString("text").orEmpty()
-                    if (outputTranscription.isNotBlank()) callbacks.onTranscript("Gemini: $outputTranscription", true)
+                    val inputTranscript = server.optJSONObject("inputTranscription")?.optString("text").orEmpty()
+                    if (inputTranscript.isNotBlank()) callbacks.onTranscript("You: $inputTranscript", false)
+                    val outputTranscript = server.optJSONObject("outputTranscription")?.optString("text").orEmpty()
+                    if (outputTranscript.isNotBlank()) callbacks.onTranscript("Gemini: $outputTranscript", true)
+
+                    // Process every returned part. Audio stays audible when only the mic is muted.
                     val parts = server.optJSONObject("modelTurn")?.optJSONArray("parts")
-                    if (parts != null) {
-                        for (i in 0 until parts.length()) {
-                            val part = parts.optJSONObject(i) ?: continue
-                            val inline = part.optJSONObject("inlineData") ?: part.optJSONObject("inline_data")
-                            if (inline != null) {
-                                val mime = inline.optString("mimeType", inline.optString("mime_type"))
-                                val data = inline.optString("data")
-                                if (data.isNotBlank() && mime.startsWith("audio/pcm")) {
-                                    val bytes = Base64.decode(data, Base64.DEFAULT)
-                                    if (!closed && !muted) outputQueue.offer(bytes)
-                                }
+                    if (parts != null) for (i in 0 until parts.length()) {
+                        val part = parts.optJSONObject(i) ?: continue
+                        val inline = part.optJSONObject("inlineData") ?: part.optJSONObject("inline_data")
+                        if (inline != null) {
+                            val mime = inline.optString("mimeType", inline.optString("mime_type"))
+                            val data = inline.optString("data")
+                            if (data.isNotBlank() && mime.startsWith("audio/pcm")) {
+                                val bytes = Base64.decode(data, Base64.DEFAULT)
+                                if (!closed) outputQueue.offer(bytes)
                             }
-                            val textPart = part.optString("text")
-                            if (textPart.isNotBlank()) callbacks.onTranscript("Gemini: $textPart", true)
                         }
                     }
                     if (server.optBoolean("turnComplete", false)) callbacks.onStatus("Live · Ready for you")
@@ -134,29 +128,37 @@ class GeminiLiveSession(
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 if (!closed) {
                     val detail = t.message ?: response?.message ?: "connection failed"
-                    cleanupMedia()
                     closed = true
+                    cleanupMedia()
                     callbacks.onEnded("Gemini Live connection failed: $detail")
                 }
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
                 if (!closed) {
-                    cleanupMedia()
                     closed = true
+                    cleanupMedia()
                     callbacks.onEnded(if (reason.isBlank()) "Gemini Live disconnected." else "Gemini Live disconnected: $reason")
                 }
             }
         })
     }
 
+    /** Mute only the mic; model audio remains audible. */
     fun setMuted(value: Boolean) {
         muted = value
         if (closed || !ready) return
         if (value) {
             socket?.send(JSONObject().put("realtimeInput", JSONObject().put("audioStreamEnd", true)).toString())
             callbacks.onStatus("Microphone muted · Live session remains connected")
-        } else callbacks.onStatus("Microphone on · Live listening")
+        } else {
+            try {
+                if (recorder == null) startMicrophone()
+                callbacks.onStatus("Microphone on · Live listening")
+            } catch (e: Exception) {
+                callbacks.onStatus("Couldn't resume microphone: ${e.message ?: "audio error"}")
+            }
+        }
     }
 
     fun sendText(text: String) {
@@ -183,9 +185,9 @@ class GeminiLiveSession(
                 (bitmap.width * scale).toInt().coerceAtLeast(1), (bitmap.height * scale).toInt().coerceAtLeast(1), true) else bitmap
             val bytes = ByteArrayOutputStream().use { out -> sized.compress(Bitmap.CompressFormat.JPEG, 72, out); out.toByteArray() }
             if (sized !== bitmap) sized.recycle()
-            val message = JSONObject().put("realtimeInput", JSONObject().put("video", JSONObject()
+            val imageMessage = JSONObject().put("realtimeInput", JSONObject().put("video", JSONObject()
                 .put("mimeType", "image/jpeg").put("data", Base64.encodeToString(bytes, Base64.NO_WRAP))))
-            if (socket?.send(message.toString()) == true) {
+            if (socket?.send(imageMessage.toString()) == true) {
                 sendText("Please look at the screenshot I just shared and help me with what is visible on it.")
                 callbacks.onStatus("Screenshot sent to Gemini Live")
             } else callbacks.onStatus("Could not send screenshot. Check the Live connection.")
@@ -226,9 +228,9 @@ class GeminiLiveSession(
                 }
                 if (muted || closed) continue
                 val data = Base64.encodeToString(buffer.copyOf(count), Base64.NO_WRAP)
-                val message = JSONObject().put("realtimeInput", JSONObject().put("audio",
+                val event = JSONObject().put("realtimeInput", JSONObject().put("audio",
                     JSONObject().put("mimeType", "audio/pcm;rate=16000").put("data", data))).toString()
-                if (socket?.send(message) != true) {
+                if (socket?.send(event) != true) {
                     if (!closed) callbacks.onStatus("Audio stream paused · reconnect if this continues")
                     break
                 }
@@ -256,7 +258,8 @@ class GeminiLiveSession(
             while (!closed && !Thread.currentThread().isInterrupted) {
                 val chunk = try { outputQueue.poll(250, TimeUnit.MILLISECONDS) } catch (_: InterruptedException) { break } ?: continue
                 if (closed) break
-                try { track.write(chunk, 0, chunk.size, AudioTrack.WRITE_BLOCKING) } catch (_: Exception) { if (!closed) callbacks.onStatus("Audio playback stopped") }
+                try { track.write(chunk, 0, chunk.size, AudioTrack.WRITE_BLOCKING) }
+                catch (_: Exception) { if (!closed) callbacks.onStatus("Audio playback stopped") }
             }
         }, "GeminiLive-Playback").apply { isDaemon = true; start() }
     }
