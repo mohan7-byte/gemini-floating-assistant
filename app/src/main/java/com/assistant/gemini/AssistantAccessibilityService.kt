@@ -92,8 +92,9 @@ class AssistantAccessibilityService : AccessibilityService() {
 
         val prefs = SecurePrefs.get(this)
         val apiKey = prefs.getString("api_key", "").orEmpty()
-        val model = prefs.getString("model", "gemini-3.8-live").orEmpty().trim().removePrefix("models/")
-            .ifBlank { "gemini-3.8-live" }
+        val savedModel = prefs.getString("model", "").orEmpty().trim().removePrefix("models/")
+        val legacyModels = setOf("gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-pro", "gemini-3-flash-preview", "gemini-3-pro-preview")
+        val model = if (savedModel.isBlank() || savedModel in legacyModels) "gemini-3.8-live" else savedModel
         if (apiKey.isBlank()) {
             Toast.makeText(this, "Paste your Google AI Studio API key in Gemini Float settings first.", Toast.LENGTH_LONG).show()
             return
