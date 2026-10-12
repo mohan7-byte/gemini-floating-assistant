@@ -1,45 +1,38 @@
-# Gemini Float — lightweight Android assistant
+# Gemini Float — native Android Gemini Live assistant
 
-Native Kotlin + XML floating Gemini assistant designed for lower-memory phones. It uses the Gemini REST API with your own Google AI Studio API key and builds with GitHub Actions; Android Studio is not required on your PC.
+Gemini Float is a lightweight Kotlin/XML Android overlay that starts only when you invoke it. There is no persistent floating orb. Double-press Volume Down (when the accessibility shortcut is enabled) or tap **Open Live assistant** to open a slim control bar and start a Gemini Live audio session.
 
 ## Features
-- Draggable translucent floating orb and expandable bottom panel.
-- Text prompt, short in-memory conversation, Android speech recognition and text-to-speech.
-- Mute voice responses, disconnect/clear conversation state, or close the assistant.
-- Select a Gemini model and thinking preset.
-- One-shot screenshot after explicitly approving Android's screen-capture consent dialog.
-- API key stored using Android encrypted preferences; never committed to the repository.
-- Debug APK artifact on push, pull request, or manual workflow run.
+- Default model: `gemini-3.8-live`; the model ID is free-form and editable in settings. The chosen model must support Gemini Live.
+- Real-time, bidirectional audio through Gemini Live WebSocket (16 kHz PCM microphone input and 24 kHz PCM output). It does not use Android SpeechRecognizer or local TTS for Live mode.
+- Compact single bar with **Mute**, **Screen**, **Disconnect**, and an up arrow. The arrow expands the transcript and text input.
+- Screenshot capture only after Android's explicit MediaProjection consent; the screenshot is then sent to the current Live session.
+- API key stored using Android encrypted preferences.
+- Disconnect closes the WebSocket and releases microphone/speaker resources, then removes the overlay. No ongoing audio stream is sent after disconnect.
+- GitHub Actions builds a debug APK without Android Studio.
 
-## Build APK without Android Studio
+## Build the APK
 1. Open the [Actions tab](../../actions).
-2. Choose **Build Gemini Floating Assistant** and run it, or push to the feature branch.
-3. Open a successful workflow run and download the `GeminiFloatingAssistant-debug` artifact.
-4. Unzip it and install `app-debug.apk` on your Android phone.
+2. Open the newest successful **Build Gemini Floating Assistant** workflow run.
+3. Download the `GeminiFloatingAssistant-debug` artifact, extract it, and install `app-debug.apk` on your Android phone.
 
-Branch: `feat/lightweight-floating-assistant`.
+Feature branch: `feat/lightweight-floating-assistant`. A draft pull request to `main` is available from the repository's Pull requests tab.
 
 ## First-run setup
-1. Paste your API key from [Google AI Studio](https://aistudio.google.com/app/apikey). Never add a real key to source files or GitHub Actions logs.
-2. Select a model and thinking mode, then save.
-3. Grant **Display over other apps**.
-4. Optionally enable **Gemini Float Shortcut** in Accessibility settings for double-volume-down. Device/OS restrictions mean this shortcut may not work on every phone; use the orb/manual launcher as a fallback.
-5. Tap **Show floating assistant**.
+1. Paste your API key from [Google AI Studio](https://aistudio.google.com/app/apikey).
+2. Enter a Live-compatible model ID. The default is `gemini-3.8-live`; custom IDs are accepted and sent to the API as entered.
+3. Grant **Display over other apps** and **Microphone** permission.
+4. Enable **Gemini Float Shortcut** from Android Accessibility settings to use double-press Volume Down. Some manufacturers/Android builds limit accessibility key interception, so the shortcut is best-effort.
+5. Tap **Open Live assistant** or double-press Volume Down.
 
-## Screenshots, privacy and permissions
-Android requires a system confirmation dialog before an app can capture other apps' screens. The screenshot button opens that dialog; capture is intended to be one-shot, and the screenshot is not submitted until you send a prompt. Some apps show secure content as black. A foreground notification is used during capture. Voice input uses Android's available speech recognizer and may involve its configured recognition provider.
+## Live API and model support
+Gemini 3.8 Live is a current stable low-latency Live API model. Gemini Live uses WebSockets and raw PCM audio: microphone input is 16 kHz mono PCM16 and audio output is 24 kHz PCM. The base `gemini-3.8-live` model does not accept a `thinkingLevel` setting; this client omits thinking configuration. See [Live API capabilities](https://ai.google.dev/gemini-api/docs/live-api/capabilities), [WebSocket API reference](https://ai.google.dev/api/live.md), and [model docs](https://ai.google.dev/gemini-api/docs/models/gemini-3.8-live).
 
-Prompts and an optional screenshot are sent to Google's Gemini API using the key you provide. Conversation history is memory-only and cleared on **Disconnect**. No backend, analytics, or advertising is included.
+## Privacy and resource notes
+The user's key is not committed to the repository. This client connects directly to the Gemini Live API using that personal key; direct client-side API keys carry risk if the APK is shared, so keep the app personal and do not publish your key. A production app distributed to others should use an ephemeral-token backend.
 
-## Model/thinking compatibility
-Model names and API features can change. If a selected model is unavailable to your key or doesn't accept the chosen thinking setting, the app surfaces the API error. Check the [Gemini API model guide](https://ai.google.dev/gemini-api/docs/models) and [thinking guide](https://ai.google.dev/gemini-api/docs/thinking).
+The Live session streams microphone audio while connected. **Disconnect** closes the socket and stops/releases the recorder and speaker. **Mute** stops sending microphone audio but keeps the Live session open and keeps Gemini audio audible; a connected session may still incur usage. Tap **Disconnect** when you want to end the session.
 
-## Resource expectations
-This uses native Android views and no embedded JavaScript, Flutter runtime, database, or large AI SDK. Actual RAM use depends on Android version, device, overlay, network stack, speech services, and screenshot capture; no fixed RAM limit or APK size is guaranteed.
+Android requires a system prompt to capture another app's screen. Some secure app content may appear black. The screenshot is sent to Google Gemini when approved; avoid capturing sensitive information.
 
-## Technical notes
-- Minimum Android: API 26 (Android 8.0).
-- Build JDK: 17; compile SDK 36; target SDK 35.
-- Gemini API calls run off the main thread.
-- AccessibilityService is only for the optional shortcut.
-- Independent personal project, not affiliated with Google.
+Minimum Android: API 26 (Android 8.0). This project uses native views and no Flutter/React Native runtime. Actual RAM, battery, network use, and API charges depend on device and use; no exact usage limits are guaranteed. Independent personal project, not affiliated with Google.
