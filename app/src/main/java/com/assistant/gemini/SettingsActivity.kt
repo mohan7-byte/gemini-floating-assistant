@@ -14,6 +14,10 @@ import androidx.appcompat.app.AppCompatActivity
 
 class SettingsActivity : AppCompatActivity() {
     companion object { private const val REQUEST_MICROPHONE = 702 }
+    private val legacyNonLiveModels = setOf(
+        "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-pro",
+        "gemini-3-flash-preview", "gemini-3-pro-preview"
+    )
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -22,18 +26,11 @@ class SettingsActivity : AppCompatActivity() {
         val apiKey = findViewById<EditText>(R.id.etApiKey)
         val model = findViewById<EditText>(R.id.etModel)
         apiKey.setText(prefs.getString("api_key", ""))
-        model.setText(prefs.getString("model", "gemini-3.8-live"))
+        val storedModel = prefs.getString("model", "").orEmpty().trim().removePrefix("models/")
+        model.setText(if (storedModel.isBlank() || storedModel in legacyNonLiveModels) "gemini-3.8-live" else storedModel)
 
         findViewById<Button>(R.id.btnSave).setOnClickListener {
-            val modelId = model.text.toString().trim().removePrefix("models/")
-            if (modelId.isBlank()) {
-                model.error = "Enter a Gemini model ID"
-                return@setOnClickListener
-            }
-            prefs.edit()
-                .putString("api_key", apiKey.text.toString().trim())
-                .putString("model", modelId)
-                .apply()
+            saveSettings(apiKey, model) ?: return@setOnClickListener
             Toast.makeText(this, "Settings saved securely on this device", Toast.LENGTH_SHORT).show()
         }
 
@@ -49,15 +46,7 @@ class SettingsActivity : AppCompatActivity() {
         }
 
         findViewById<Button>(R.id.btnShowOrb).setOnClickListener {
-            // Persist edits before starting a session.
-            val modelId = model.text.toString().trim().removePrefix("models/")
-            if (modelId.isBlank()) {
-                model.error = "Enter a Gemini model ID"
-                return@setOnClickListener
-            }
-            prefs.edit().putString("api_key", apiKey.text.toString().trim())
-                .putString("model", modelId).apply()
-
+            if (saveSettings(apiKey, model) == null) return@setOnClickListener
             if (apiKey.text.toString().isBlank()) {
                 apiKey.error = "Paste your Google AI Studio API key first"
                 Toast.makeText(this, "An API key is required for Gemini Live", Toast.LENGTH_LONG).show()
@@ -74,6 +63,19 @@ class SettingsActivity : AppCompatActivity() {
             }
             openLiveAssistant()
         }
+    }
+
+    private fun saveSettings(apiKey: EditText, model: EditText): String? {
+        val modelId = model.text.toString().trim().removePrefix("models/")
+        if (modelId.isBlank()) {
+            model.error = "Enter a Gemini Live model ID"
+            return null
+        }
+        SecurePrefs.get(this).edit()
+            .putString("api_key", apiKey.text.toString().trim())
+            .putString("model", modelId)
+            .apply()
+        return modelId
     }
 
     private fun openLiveAssistant() {
