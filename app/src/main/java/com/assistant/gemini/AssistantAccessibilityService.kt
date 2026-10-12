@@ -199,7 +199,7 @@ class AssistantAccessibilityService : AccessibilityService() {
         mainHandler.post {
             if (panelView == null || message.isBlank()) return@post
             if (isAssistant && transcript.isNotEmpty() &&
-                transcript.substringAfterLast("\n").startsWith("Gemini: ")) {
+                transcript.toString().substringAfterLast("\n").startsWith("Gemini: ")) {
                 transcript.append(message.removePrefix("Gemini: "))
             } else {
                 if (transcript.isNotEmpty()) transcript.append("\n")
