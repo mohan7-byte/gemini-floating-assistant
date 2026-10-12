@@ -51,9 +51,9 @@
             android:layout_width="wrap_content"
             android:layout_height="40dp"
             android:gravity="center"
-            android:minWidth="46dp"
+            android:minWidth="62dp"
             android:paddingHorizontal="6dp"
-            android:text="Screen"
+            android:text="Screenshot"
             android:textColor="@color/text_primary"
             android:textSize="11sp" />
 
