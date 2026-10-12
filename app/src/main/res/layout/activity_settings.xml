@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:background="@color/ink" android:fillViewport="true">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="vertical" android:padding="24dp">
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="GEMINI FLOAT" android:textColor="@color/accent" android:textStyle="bold" android:letterSpacing="0.12" android:textSize="12sp" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="8dp" android:text="Your assistant.\nAlways one tap away." android:textColor="@color/text_primary" android:textSize="30sp" android:textStyle="bold" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp"
+            android:text="Private by design · Lightweight native Android · Your Gemini API key" android:textColor="@color/text_secondary" android:textSize="14sp" />
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="28dp" android:text="API KEY" android:textColor="@color/accent" android:textStyle="bold" android:textSize="12sp" />
+        <EditText android:id="@+id/etApiKey" android:layout_width="match_parent" android:layout_height="54dp" android:layout_marginTop="8dp"
+            android:background="@drawable/input_background" android:hint="Paste Google AI Studio API key" android:inputType="textPassword|textNoSuggestions"
+            android:paddingHorizontal="16dp" android:textColor="@color/text_primary" android:textColorHint="@color/text_secondary" android:singleLine="true" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp"
+            android:text="Stored encrypted on this device. Never put your key in GitHub." android:textColor="@color/text_secondary" android:textSize="12sp" />
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="22dp" android:text="MODEL" android:textColor="@color/accent" android:textStyle="bold" android:textSize="12sp" />
+        <Spinner android:id="@+id/spnModel" android:layout_width="match_parent" android:layout_height="54dp" android:layout_marginTop="8dp"
+            android:background="@drawable/input_background" android:popupBackground="@color/panel" />
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="22dp" android:text="THINKING" android:textColor="@color/accent" android:textStyle="bold" android:textSize="12sp" />
+        <Spinner android:id="@+id/spnThinking" android:layout_width="match_parent" android:layout_height="54dp" android:layout_marginTop="8dp"
+            android:background="@drawable/input_background" android:popupBackground="@color/panel" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp"
+            android:text="Higher thinking can improve complex answers but may take longer. Supported settings depend on the model." android:textColor="@color/text_secondary" android:textSize="12sp" />
+        <com.google.android.material.button.MaterialButton android:id="@+id/btnSave" android:layout_width="match_parent" android:layout_height="54dp"
+            android:layout_marginTop="26dp" android:text="Save settings" android:textAllCaps="false" android:textStyle="bold"
+            android:textColor="@color/ink" android:backgroundTint="@color/accent" />
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="30dp" android:text="QUICK ACCESS" android:textColor="@color/accent" android:textStyle="bold" android:textSize="12sp" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="1 · Allow display over other apps\nA small translucent orb stays above your apps.\n\n2 · Optional volume shortcut\nAccessibility settings are required; Android may restrict key interception on some devices.\n\n3 · Screenshot context\nTap Screenshot in the panel, then approve Android's screen-capture prompt. Nothing is captured silently."
+            android:textColor="@color/text_secondary" android:textSize="14sp" android:lineSpacingExtra="4dp" />
+        <com.google.android.material.button.MaterialButton android:id="@+id/btnGrantOverlay" android:layout_width="match_parent" android:layout_height="50dp" android:layout_marginTop="14dp"
+            android:text="Allow floating window" android:textAllCaps="false" android:textColor="@color/text_primary" android:backgroundTint="@color/panel_elevated" />
+        <com.google.android.material.button.MaterialButton android:id="@+id/btnGrantAccessibility" android:layout_width="match_parent" android:layout_height="50dp" android:layout_marginTop="8dp"
+            android:text="Set up volume shortcut" android:textAllCaps="false" android:textColor="@color/text_primary" android:backgroundTint="@color/panel_elevated" />
+        <com.google.android.material.button.MaterialButton android:id="@+id/btnShowOrb" android:layout_width="match_parent" android:layout_height="50dp" android:layout_marginTop="8dp"
+            android:text="Show floating assistant" android:textAllCaps="false" android:textColor="@color/text_primary" android:backgroundTint="@color/panel_elevated" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="24dp" android:layout_marginBottom="20dp"
+            android:text="Gemini Float is an independent personal project and is not affiliated with Google. API usage is subject to your Google AI Studio plan and limits."
+            android:textColor="@color/text_secondary" android:textSize="11sp" />
+    </LinearLayout>
+</ScrollView>
