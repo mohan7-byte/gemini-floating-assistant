@@ -8,6 +8,8 @@ import android.media.AudioRecord
 import android.media.AudioTrack
 import android.media.MediaRecorder
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import android.util.Base64
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -37,11 +39,13 @@ class GeminiLiveSession(
     }
 
     private val model = modelId.trim().removePrefix("models/")
+    private val mainHandler = Handler(Looper.getMainLooper())
     @Volatile private var socket: WebSocket? = null
     @Volatile private var closed = false
     @Volatile private var ready = false
     @Volatile private var muted = false
     private val cleanupOnce = AtomicBoolean(false)
+    @Volatile private var setupTimeout: Runnable? = null
     private val outputQueue = LinkedBlockingQueue<ByteArray>()
     @Volatile private var recorder: AudioRecord? = null
     @Volatile private var player: AudioTrack? = null
@@ -56,20 +60,29 @@ class GeminiLiveSession(
         }
         val url = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=" + Uri.encode(apiKey)
         callbacks.onStatus("Connecting to $model…")
+        val timeout = Runnable {
+            if (!closed && !ready) {
+                fail("Timed out waiting for Gemini Live setup. Check that the API key is valid, the model is enabled for Live API, and your network allows WebSockets.")
+            }
+        }
+        setupTimeout = timeout
+        mainHandler.postDelayed(timeout, 15_000L)
         socket = client.newWebSocket(Request.Builder().url(url).build(), object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 if (closed) { webSocket.cancel(); return }
+                callbacks.onStatus("WebSocket connected · configuring Gemini Live…")
                 val setup = JSONObject().put("setup", JSONObject()
                     .put("model", "models/$model")
-                    .put("generationConfig", JSONObject()
-                        .put("responseModalities", JSONArray().put("AUDIO"))
-                        .put("speechConfig", JSONObject().put("voiceConfig", JSONObject()
-                            .put("prebuiltVoiceConfig", JSONObject().put("voiceName", "Kore")))))
+                    // Match Google's current raw-WebSocket Live quick-start: modalities
+                    // are top-level setup fields for the direct WebSocket protocol.
+                    .put("responseModalities", JSONArray().put("AUDIO"))
                     .put("inputAudioTranscription", JSONObject())
                     .put("outputAudioTranscription", JSONObject())
                     .put("systemInstruction", JSONObject().put("parts", JSONArray().put(JSONObject().put("text",
                         "You are a helpful, concise personal voice assistant. Reply naturally in spoken conversation. Do not claim to see the user's screen unless they explicitly share a screenshot.")))))
-                webSocket.send(setup.toString())
+                if (!webSocket.send(setup.toString())) {
+                    fail("Gemini Live setup message could not be sent. Check network access and retry.")
+                }
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
@@ -83,6 +96,8 @@ class GeminiLiveSession(
                         return
                     }
                     if (root.has("setupComplete")) {
+                        setupTimeout?.let(mainHandler::removeCallbacks)
+                        setupTimeout = null
                         ready = true
                         try {
                             startPlayback()
@@ -127,7 +142,12 @@ class GeminiLiveSession(
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 if (!closed) {
-                    val detail = t.message ?: response?.message ?: "connection failed"
+                    setupTimeout?.let(mainHandler::removeCallbacks)
+                    setupTimeout = null
+                    val detail = buildString {
+                        append(t.message ?: response?.message ?: "connection failed")
+                        response?.let { append(" (HTTP ").append(it.code).append(")") }
+                    }
                     closed = true
                     cleanupMedia()
                     callbacks.onEnded("Gemini Live connection failed: $detail")
@@ -135,10 +155,12 @@ class GeminiLiveSession(
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                setupTimeout?.let(mainHandler::removeCallbacks)
+                setupTimeout = null
                 if (!closed) {
                     closed = true
                     cleanupMedia()
-                    callbacks.onEnded(if (reason.isBlank()) "Gemini Live disconnected." else "Gemini Live disconnected: $reason")
+                    callbacks.onEnded(if (reason.isBlank()) "Gemini Live disconnected (code $code)." else "Gemini Live disconnected (code $code): $reason")
                 }
             }
         })
@@ -168,11 +190,20 @@ class GeminiLiveSession(
             if (!ready) callbacks.onStatus("Wait for Gemini Live to connect before sending text.")
             return
         }
-        val event = JSONObject().put("clientContent", JSONObject()
-            .put("turns", JSONArray().put(JSONObject().put("role", "user")
-                .put("parts", JSONArray().put(JSONObject().put("text", clean)))))
-            .put("turnComplete", true))
+        val event = JSONObject().put("realtimeInput", JSONObject().put("text", clean))
         if (socket?.send(event.toString()) != true) callbacks.onStatus("Couldn't send text. Check the Live connection.")
+    }
+
+    private fun fail(message: String) {
+        if (closed) return
+        setupTimeout?.let(mainHandler::removeCallbacks)
+        setupTimeout = null
+        closed = true
+        ready = false
+        socket?.cancel()
+        socket = null
+        cleanupMedia()
+        callbacks.onEnded(message)
     }
 
     fun sendImage(bitmap: Bitmap) {
@@ -198,6 +229,8 @@ class GeminiLiveSession(
     }
 
     fun close() {
+        setupTimeout?.let(mainHandler::removeCallbacks)
+        setupTimeout = null
         if (closed) { cleanupMedia(); return }
         closed = true
         ready = false
