@@ -144,12 +144,13 @@ class GeminiLiveSession(
         })
     }
 
-    /** Mute only the mic; model audio remains audible. */
+    /** Mute only the mic; model audio remains audible. Release mic hardware while muted. */
     fun setMuted(value: Boolean) {
         muted = value
         if (closed || !ready) return
         if (value) {
             socket?.send(JSONObject().put("realtimeInput", JSONObject().put("audioStreamEnd", true)).toString())
+            stopMicrophone()
             callbacks.onStatus("Microphone muted · Live session remains connected")
         } else {
             try {
@@ -236,6 +237,16 @@ class GeminiLiveSession(
                 }
             }
         }, "GeminiLive-Microphone").apply { isDaemon = true; start() }
+    }
+
+    private fun stopMicrophone() {
+        val record = recorder
+        val thread = micThread
+        recorder = null
+        micThread = null
+        runCatching { record?.stop() }
+        runCatching { record?.release() }
+        thread?.interrupt()
     }
 
     private fun startPlayback() {
