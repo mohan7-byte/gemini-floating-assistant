@@ -124,7 +124,7 @@ class AssistantAccessibilityService : AccessibilityService() {
             panelExpanded = !panelExpanded
             view.findViewById<LinearLayout>(R.id.expandedContent).visibility =
                 if (panelExpanded) View.VISIBLE else View.GONE
-            view.findViewById<TextView>(R.id.btnExpand).text = if (panelExpanded) "↓" else "↑"
+            view.findViewById<TextView>(R.id.btnExpand).text = if (panelExpanded) "⌄" else "⌃"
             if (panelExpanded) {
                 view.findViewById<ScrollView>(R.id.responseScroll).post {
                     view.findViewById<ScrollView>(R.id.responseScroll).fullScroll(View.FOCUS_DOWN)
@@ -179,7 +179,7 @@ class AssistantAccessibilityService : AccessibilityService() {
                     if (viewNow != null) {
                         panelExpanded = true
                         viewNow.findViewById<LinearLayout>(R.id.expandedContent).visibility = View.VISIBLE
-                        viewNow.findViewById<TextView>(R.id.btnExpand).text = "↓"
+                        viewNow.findViewById<TextView>(R.id.btnExpand).text = "⌄"
                         viewNow.findViewById<TextView>(R.id.tvStatus).text = message
                         viewNow.findViewById<TextView>(R.id.tvResponse).text =
                             "Gemini Live did not start.\n\n$message\n\nCheck the API key, Live model access, and network, then tap Disconnect and launch again."
