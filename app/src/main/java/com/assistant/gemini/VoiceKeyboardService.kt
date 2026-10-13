@@ -2,43 +2,42 @@ package com.assistant.gemini
 
 import android.content.pm.PackageManager
 import android.inputmethodservice.InputMethodService
-import android.media.AudioFormat
-import android.media.AudioRecord
-import android.media.MediaRecorder
 import android.os.Handler
 import android.os.Looper
 import android.view.View
 import android.widget.Button
 import android.widget.TextView
-import kotlinx.coroutines.runBlocking
-import java.io.ByteArrayOutputStream
-import kotlin.math.sqrt
 
+/**
+ * Live dictation IME. Uses Gemini Live's inputAudioTranscription stream and commits
+ * each new transcription fragment straight into the currently focused text field.
+ */
 class VoiceKeyboardService : InputMethodService() {
     private val mainHandler = Handler(Looper.getMainLooper())
-    @Volatile private var stopRequested = false
     @Volatile private var recording = false
+    @Volatile private var intentionalStop = false
     private var statusView: TextView? = null
     private var dictateButton: Button? = null
-    private var captureThread: Thread? = null
+    @Volatile private var liveSession: GeminiLiveSession? = null
+    @Volatile private var lastTranscriptChunk = ""
 
     override fun onCreateInputView(): View {
         val view = layoutInflater.inflate(R.layout.ime_voice_keyboard, null)
         statusView = view.findViewById(R.id.imeStatus)
         dictateButton = view.findViewById(R.id.btnDictate)
         dictateButton?.setOnClickListener {
-            if (recording) {
-                stopRequested = true
-                showStatus("Finishing your sentence…")
-            } else startDictation()
+            if (recording) stopDictation() else startDictation()
         }
-        view.findViewById<View>(R.id.btnHideKeyboard).setOnClickListener { requestHideSelf(0) }
+        view.findViewById<View>(R.id.btnHideKeyboard).setOnClickListener {
+            stopDictation()
+            requestHideSelf(0)
+        }
         return view
     }
 
     private fun startDictation() {
-        val prefs = SecurePrefs.get(this)
-        val key = prefs.getString("api_key", "").orEmpty()
+        if (recording) return
+        val key = SecurePrefs.get(this).getString("api_key", "").orEmpty()
         if (key.isBlank()) {
             showStatus("Open Gemini Float and save your Google AI Studio API key first.")
             return
@@ -47,91 +46,103 @@ class VoiceKeyboardService : InputMethodService() {
             showStatus("Enable microphone permission for Gemini Float in Android app settings.")
             return
         }
-        if (recording) return
-        val targetConnection = currentInputConnection
-        if (targetConnection == null) {
+        val connection = currentInputConnection
+        if (connection == null) {
             showStatus("Tap a text field first, then choose Gemini Float Voice Keyboard.")
             return
         }
-        stopRequested = false
+
+        intentionalStop = false
         recording = true
-        dictateButton?.text = "Stop and insert"
-        showStatus("Listening… speak naturally. A pause finishes the sentence.")
-        captureThread = Thread({
-            var recorder: AudioRecord? = null
-            try {
-                val min = AudioRecord.getMinBufferSize(SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
-                if (min <= 0) throw IllegalStateException("This device doesn't support 16 kHz microphone capture")
-                recorder = AudioRecord(MediaRecorder.AudioSource.MIC, SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, maxOf(min * 2, 6400))
-                if (recorder.state != AudioRecord.STATE_INITIALIZED) throw IllegalStateException("Microphone couldn't be initialized")
-                recorder.startRecording()
-                val pcm = ByteArrayOutputStream()
-                val samples = ShortArray(1600)
-                var heardSpeech = false
-                var silentChunks = 0
-                var totalChunks = 0
-                while (!stopRequested && totalChunks < MAX_CHUNKS) {
-                    val count = recorder.read(samples, 0, samples.size)
-                    if (count <= 0) {
-                        if (stopRequested) break
-                        continue
+        lastTranscriptChunk = ""
+        dictateButton?.text = "Stop dictation"
+        showStatus("Connecting to Gemini Live…")
+
+        // Use the same Live model as the floating assistant, but in transcription-only
+        // mode: no spoken answers, no batch upload, and no waiting for a long pause.
+        val session = GeminiLiveSession(
+            this,
+            key,
+            "gemini-3.8-live",
+            object : GeminiLiveSession.Callbacks {
+                override fun onStatus(message: String) {
+                    if (recording) showStatus(message)
+                }
+
+                override fun onReady() {
+                    showStatus("Listening · words appear as you speak")
+                }
+
+                override fun onTranscript(message: String, isAssistant: Boolean) {
+                    if (isAssistant || !recording || message.isBlank()) return
+                    val delta = synchronized(this@VoiceKeyboardService) {
+                        val previous = lastTranscriptChunk
+                        lastTranscriptChunk = message
+                        transcriptionDelta(previous, message)
                     }
-                    var squareSum = 0.0
-                    for (i in 0 until count) {
-                        val sample = samples[i].toInt()
-                        squareSum += sample.toDouble() * sample.toDouble()
-                        pcm.write(sample and 0xff)
-                        pcm.write((sample shr 8) and 0xff)
+                    if (delta.isNotBlank()) {
+                        mainHandler.post {
+                            if (recording) {
+                                val needsSpace = shouldInsertSpace(connection, delta)
+                                connection.commitText((if (needsSpace) " " else "") + delta, 1)
+                            }
+                        }
                     }
-                    val rms = sqrt(squareSum / count)
-                    if (rms > SPEECH_RMS_THRESHOLD) {
-                        heardSpeech = true
-                        silentChunks = 0
-                    } else if (heardSpeech) silentChunks++
-                    totalChunks++
-                    if (heardSpeech && silentChunks >= SILENCE_CHUNKS) break
                 }
-                runCatching { recorder.stop() }
-                if (!heardSpeech || pcm.size() < SAMPLE_RATE / 2) {
-                    throw IllegalStateException("No speech detected. Speak close to the microphone and try again.")
-                }
-                showStatus("Formatting speech with Gemini…")
-                val formatted = runBlocking {
-                    GeminiApiClient.transcribeAndFormatAudio(
-                        pcm.toByteArray(),
-                        key,
-                        prefs.getString("voice_keyboard_model", "gemini-2.5-flash").orEmpty()
-                    )
-                }
-                val failed = formatted.isBlank() ||
-                    formatted.startsWith("API key") ||
-                    formatted.startsWith("Gemini API error") ||
-                    formatted.startsWith("Connection failed") ||
-                    formatted.startsWith("Couldn't transcribe") ||
-                    formatted.startsWith("Request rejected") ||
-                    formatted.startsWith("Gemini rate limit")
-                if (failed) {
-                    showStatus(formatted.ifBlank { "Gemini returned no text. Try again." })
-                } else {
+
+                override fun onEnded(message: String) {
                     mainHandler.post {
-                        targetConnection.commitText(formatted.trim(), 1)
-                        statusView?.text = "Text inserted · tap Dictate to continue"
+                        val wasUserStop = intentionalStop
+                        recording = false
+                        liveSession = null
+                        dictateButton?.text = "●  Start live dictation"
+                        showStatus(if (wasUserStop) "Dictation stopped · text kept in place" else message)
                     }
                 }
-            } catch (e: Exception) {
-                showStatus(e.message ?: "Voice typing failed. Try again.")
-            } finally {
-                runCatching { recorder?.stop() }
-                runCatching { recorder?.release() }
-                recording = false
-                mainHandler.post {
-                    dictateButton?.text = "●  Dictate"
-                    if (statusView?.text == "Listening… speak naturally. A pause finishes the sentence.") {
-                        statusView?.text = "Tap Dictate to enter formatted text into the focused app."
-                    }
-                }
+            },
+            dictationOnly = true
+        )
+        liveSession = session
+        session.connect()
+    }
+
+    private fun stopDictation() {
+        if (!recording && liveSession == null) return
+        intentionalStop = true
+        recording = false
+        val session = liveSession
+        liveSession = null
+        session?.close()
+        dictateButton?.text = "●  Start live dictation"
+        showStatus("Dictation stopped · text kept in place")
+        lastTranscriptChunk = ""
+    }
+
+    private fun shouldInsertSpace(connection: android.view.inputmethod.InputConnection, delta: String): Boolean {
+        val first = delta.firstOrNull() ?: return false
+        if (first.isWhitespace() || first in ".,!?;:%)]}") return false
+        val before = connection.getTextBeforeCursor(1, 0)?.lastOrNull() ?: return false
+        return !before.isWhitespace() && before !in "([{\n\r"
+    }
+
+    /**
+     * Live transcription can arrive either as independent fragments or as a growing
+     * partial. Convert a growing partial to just its suffix and trim a small overlap
+     * between adjacent fragments so words are not duplicated in the target field.
+     */
+    private fun transcriptionDelta(previous: String, current: String): String {
+        val next = current.trim()
+        if (next.isBlank() || next == previous.trim()) return ""
+        if (previous.isBlank()) return next
+        val old = previous.trim()
+        if (next.startsWith(old)) return next.substring(old.length).trimStart()
+        val maxOverlap = minOf(old.length, next.length, 100)
+        for (overlap in maxOverlap downTo 1) {
+            if (old.takeLast(overlap).equals(next.take(overlap), ignoreCase = true)) {
+                return next.substring(overlap).trimStart()
             }
-        }, "GeminiVoiceKeyboard").apply { isDaemon = true; start() }
+        }
+        return next
     }
 
     private fun showStatus(message: String) {
@@ -139,20 +150,12 @@ class VoiceKeyboardService : InputMethodService() {
     }
 
     override fun onFinishInputView(finishingInput: Boolean) {
-        stopRequested = true
+        stopDictation()
         super.onFinishInputView(finishingInput)
     }
 
     override fun onDestroy() {
-        stopRequested = true
-        captureThread?.interrupt()
+        stopDictation()
         super.onDestroy()
-    }
-
-    companion object {
-        private const val SAMPLE_RATE = 16000
-        private const val MAX_CHUNKS = 250
-        private const val SILENCE_CHUNKS = 13
-        private const val SPEECH_RMS_THRESHOLD = 260.0
     }
 }

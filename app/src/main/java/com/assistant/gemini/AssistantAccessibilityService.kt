@@ -35,6 +35,8 @@ class AssistantAccessibilityService : AccessibilityService() {
     private var panelView: View? = null
     private var panelLayoutParams: WindowManager.LayoutParams? = null
     private var panelExpanded = false
+    private var panelMinimized = false
+    private var cameraWasVisible = false
     private var secondaryActionsShown = false
     private var muted = false
     private var lastVolumeDown = 0L
@@ -142,15 +144,20 @@ class AssistantAccessibilityService : AccessibilityService() {
         panelView = view
         panelLayoutParams = params
         panelExpanded = false
+        panelMinimized = false
+        cameraWasVisible = false
         secondaryActionsShown = false
         muted = false
         transcript.setLength(0)
-        view.findViewById<TextView>(R.id.tvModelBadge).text = model
+        view.findViewById<TextView>(R.id.tvModelBadge).text = "Connecting securely…"
         view.findViewById<LinearLayout>(R.id.expandedContent).visibility = View.GONE
         view.findViewById<LinearLayout>(R.id.cameraPreviewPanel).visibility = View.GONE
         view.findViewById<LinearLayout>(R.id.secondaryActionPage).visibility = View.GONE
         view.findViewById<LinearLayout>(R.id.primaryActionPage).visibility = View.VISIBLE
         setIndicatorConnecting()
+
+        view.findViewById<View>(R.id.btnMinimize).setOnClickListener { minimizePanel() }
+        view.findViewById<View>(R.id.minimizedBubble).setOnClickListener { restorePanel() }
 
         view.findViewById<View>(R.id.btnExpand).setOnClickListener {
             panelExpanded = !panelExpanded
@@ -164,7 +171,11 @@ class AssistantAccessibilityService : AccessibilityService() {
 
         view.findViewById<View>(R.id.btnMute).setOnClickListener {
             muted = !muted
-            view.findViewById<TextView>(R.id.btnMute).text = if (muted) "Muted" else "Mute"
+            view.findViewById<TextView>(R.id.btnMute).apply {
+                text = if (muted) "∕" else "♩"
+                contentDescription = if (muted) "Unmute microphone" else "Mute microphone"
+                alpha = if (muted) 0.72f else 1f
+            }
             liveSession?.setMuted(muted)
             status(if (muted) "Microphone muted · Live remains connected" else "Microphone on · Live listening")
         }
@@ -461,6 +472,14 @@ class AssistantAccessibilityService : AccessibilityService() {
     private fun status(message: String) {
         mainHandler.post {
             panelView?.findViewById<TextView>(R.id.tvStatus)?.text = message
+            panelView?.findViewById<TextView>(R.id.tvModelBadge)?.text = when {
+                message.contains("Listening", ignoreCase = true) -> "Connected · Listening"
+                message.contains("Ready", ignoreCase = true) -> "Connected · Ready"
+                message.contains("muted", ignoreCase = true) -> "Connected · Microphone muted"
+                message.contains("error", ignoreCase = true) || message.contains("failed", ignoreCase = true) -> "Connection needs attention"
+                message.contains("Connecting", ignoreCase = true) || message.contains("acknowledgement", ignoreCase = true) -> "Connecting securely…"
+                else -> message.take(48)
+            }
             panelView?.findViewById<TextView>(R.id.tvCameraStatus)?.let { cameraStatus ->
                 if (message.startsWith("Camera")) cameraStatus.text = message
             }
@@ -527,6 +546,64 @@ class AssistantAccessibilityService : AccessibilityService() {
         runCatching { windowManager?.updateViewLayout(view, params) }
     }
 
+    private fun minimizePanel() {
+        val view = panelView ?: return
+        if (panelMinimized) return
+        panelMinimized = true
+        cameraWasVisible = view.findViewById<LinearLayout>(R.id.cameraPreviewPanel).visibility == View.VISIBLE
+        view.findViewById<LinearLayout>(R.id.topBar).animate().alpha(0f).setDuration(120L).withEndAction {
+            if (panelView !== view || !panelMinimized) return@withEndAction
+            view.findViewById<LinearLayout>(R.id.topBar).visibility = View.GONE
+            view.findViewById<LinearLayout>(R.id.expandedContent).visibility = View.GONE
+            view.findViewById<LinearLayout>(R.id.cameraPreviewPanel).visibility = View.GONE
+            view.findViewById<View>(R.id.minimizedBubble).apply {
+                visibility = View.VISIBLE
+                alpha = 0f
+                scaleX = 0.72f
+                scaleY = 0.72f
+                animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(220L).start()
+            }
+            view.setBackgroundColor(Color.TRANSPARENT)
+            view.setPadding(0, 0, 0, 0)
+            panelLayoutParams?.apply {
+                width = WindowManager.LayoutParams.WRAP_CONTENT
+                gravity = Gravity.BOTTOM or Gravity.END
+                x = dp(8)
+                y = dp(8)
+            }
+            updatePanelLayout()
+        }.start()
+    }
+
+    private fun restorePanel() {
+        val view = panelView ?: return
+        if (!panelMinimized) return
+        panelMinimized = false
+        view.findViewById<View>(R.id.minimizedBubble).animate().alpha(0f).scaleX(0.72f).scaleY(0.72f)
+            .setDuration(100L).withEndAction {
+                if (panelView !== view || panelMinimized) return@withEndAction
+                view.findViewById<View>(R.id.minimizedBubble).visibility = View.GONE
+                view.setBackgroundResource(R.drawable.panel_background)
+                view.setPadding(dp(18), dp(8), dp(18), dp(8))
+                panelLayoutParams?.apply {
+                    width = WindowManager.LayoutParams.MATCH_PARENT
+                    gravity = Gravity.BOTTOM
+                    x = 0
+                    y = dp(8)
+                }
+                view.findViewById<LinearLayout>(R.id.topBar).apply {
+                    visibility = View.VISIBLE
+                    alpha = 0f
+                    animate().alpha(1f).setDuration(180L).start()
+                }
+                view.findViewById<LinearLayout>(R.id.expandedContent).visibility =
+                    if (panelExpanded) View.VISIBLE else View.GONE
+                view.findViewById<LinearLayout>(R.id.cameraPreviewPanel).visibility =
+                    if (cameraWasVisible) View.VISIBLE else View.GONE
+                updatePanelLayout()
+            }.start()
+    }
+
     private fun updatePanelLayout() {
         val view = panelView ?: return
         val params = panelLayoutParams ?: return
@@ -548,6 +625,8 @@ class AssistantAccessibilityService : AccessibilityService() {
         panelView = null
         panelLayoutParams = null
         panelExpanded = false
+        panelMinimized = false
+        cameraWasVisible = false
         muted = false
         transcript.setLength(0)
         if (!message.isNullOrBlank()) Toast.makeText(this, message, Toast.LENGTH_SHORT).show()

@@ -5,99 +5,121 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:background="@drawable/panel_background"
-    android:elevation="20dp"
+    android:elevation="24dp"
+    android:gravity="center_vertical"
     android:orientation="vertical"
-    android:paddingHorizontal="9dp"
-    android:paddingVertical="7dp">
+    android:paddingHorizontal="18dp"
+    android:paddingVertical="8dp">
 
     <LinearLayout
         android:id="@+id/topBar"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="60dp"
         android:gravity="center_vertical"
         android:orientation="horizontal">
 
-        <View
-            android:id="@+id/liveStatusDot"
-            android:layout_width="7dp"
-            android:layout_height="7dp"
-            android:background="@drawable/floating_orb" />
+        <FrameLayout
+            android:layout_width="46dp"
+            android:layout_height="46dp"
+            android:layout_marginEnd="10dp"
+            android:background="@drawable/floating_orb">
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:text="≋"
+                android:textColor="@color/accent"
+                android:textSize="27sp"
+                android:textStyle="bold" />
+            <View
+                android:id="@+id/liveStatusDot"
+                android:layout_width="9dp"
+                android:layout_height="9dp"
+                android:layout_gravity="bottom|end"
+                android:layout_margin="1dp"
+                android:background="@drawable/floating_orb" />
+        </FrameLayout>
 
-        <TextView
-            android:id="@+id/tvModelBadge"
+        <LinearLayout
             android:layout_width="0dp"
-            android:layout_height="42dp"
+            android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:ellipsize="end"
-            android:gravity="center_vertical"
-            android:maxLines="1"
-            android:paddingStart="7dp"
-            android:text="gemini-3.8-live"
-            android:textColor="@color/accent"
-            android:textSize="10sp"
-            android:textStyle="bold" />
+            android:orientation="vertical">
+            <TextView
+                android:id="@+id/tvLiveTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Gemini Live"
+                android:textColor="@color/text_primary"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+            <TextView
+                android:id="@+id/tvModelBadge"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="3dp"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:text="Connecting securely…"
+                android:textColor="@color/accent"
+                android:textSize="12sp" />
+        </LinearLayout>
 
-        <!-- Swipe left/right across this strip to switch between core and extra actions. -->
         <FrameLayout
             android:id="@+id/actionsPager"
             android:layout_width="0dp"
-            android:layout_height="42dp"
-            android:layout_weight="2.7"
+            android:layout_height="46dp"
+            android:layout_weight="2.1"
+            android:layout_marginStart="3dp"
             android:contentDescription="Swipe left or right for more controls">
 
             <LinearLayout
                 android:id="@+id/primaryActionPage"
-                android:layout_width="match_parent"
+                android:layout_width="wrap_content"
                 android:layout_height="match_parent"
                 android:gravity="center_vertical|end"
                 android:orientation="horizontal">
 
                 <TextView
                     android:id="@+id/btnMute"
-                    android:layout_width="wrap_content"
+                    android:layout_width="34dp"
                     android:layout_height="36dp"
-                    android:layout_marginHorizontal="2dp"
+                    android:layout_marginStart="3dp"
                     android:background="@drawable/action_chip"
                     android:contentDescription="Mute microphone"
                     android:gravity="center"
-                    android:minWidth="40dp"
-                    android:paddingHorizontal="6dp"
-                    android:text="Mute"
+                    android:text="♩"
                     android:textColor="@color/text_primary"
-                    android:textSize="10sp" />
+                    android:textSize="19sp" />
 
                 <TextView
                     android:id="@+id/btnScreenshot"
-                    android:layout_width="wrap_content"
-                    android:layout_height="36dp"
-                    android:layout_marginHorizontal="2dp"
+                    android:layout_width="42dp"
+                    android:layout_height="42dp"
+                    android:layout_marginStart="7dp"
                     android:background="@drawable/action_chip"
                     android:contentDescription="Capture screenshot of the app underneath"
                     android:gravity="center"
-                    android:minWidth="38dp"
-                    android:paddingHorizontal="5dp"
                     android:text="▧"
                     android:textColor="@color/text_primary"
-                    android:textSize="17sp" />
+                    android:textSize="18sp" />
 
                 <TextView
                     android:id="@+id/btnDisconnect"
-                    android:layout_width="wrap_content"
-                    android:layout_height="36dp"
-                    android:layout_marginHorizontal="2dp"
+                    android:layout_width="42dp"
+                    android:layout_height="42dp"
+                    android:layout_marginStart="7dp"
                     android:background="@drawable/action_chip"
                     android:contentDescription="Disconnect Gemini Live and stop streaming"
                     android:gravity="center"
-                    android:minWidth="34dp"
-                    android:paddingHorizontal="6dp"
                     android:text="×"
                     android:textColor="@color/danger"
-                    android:textSize="20sp" />
+                    android:textSize="25sp" />
             </LinearLayout>
 
             <LinearLayout
                 android:id="@+id/secondaryActionPage"
-                android:layout_width="match_parent"
+                android:layout_width="wrap_content"
                 android:layout_height="match_parent"
                 android:alpha="0"
                 android:gravity="center_vertical|end"
@@ -106,73 +128,93 @@
 
                 <TextView
                     android:id="@+id/btnCamera"
-                    android:layout_width="wrap_content"
-                    android:layout_height="36dp"
-                    android:layout_marginHorizontal="2dp"
+                    android:layout_width="42dp"
+                    android:layout_height="42dp"
+                    android:layout_marginStart="5dp"
                     android:background="@drawable/action_chip"
                     android:contentDescription="Open low-resolution camera preview"
                     android:gravity="center"
-                    android:minWidth="38dp"
-                    android:paddingHorizontal="5dp"
                     android:text="◎"
                     android:textColor="@color/text_primary"
-                    android:textSize="19sp" />
+                    android:textSize="21sp" />
 
                 <TextView
                     android:id="@+id/btnFiles"
-                    android:layout_width="wrap_content"
-                    android:layout_height="36dp"
-                    android:layout_marginHorizontal="2dp"
+                    android:layout_width="42dp"
+                    android:layout_height="42dp"
+                    android:layout_marginStart="7dp"
                     android:background="@drawable/action_chip"
                     android:contentDescription="Choose a TXT, Markdown, or PDF file for Gemini"
                     android:gravity="center"
-                    android:minWidth="38dp"
-                    android:paddingHorizontal="5dp"
                     android:text="↥"
                     android:textColor="@color/text_primary"
-                    android:textSize="19sp" />
+                    android:textSize="21sp" />
 
                 <TextView
                     android:id="@+id/btnVoiceKeyboard"
-                    android:layout_width="wrap_content"
-                    android:layout_height="36dp"
-                    android:layout_marginHorizontal="2dp"
+                    android:layout_width="42dp"
+                    android:layout_height="42dp"
+                    android:layout_marginStart="7dp"
                     android:background="@drawable/action_chip"
                     android:contentDescription="Select Gemini Float Voice Keyboard"
                     android:gravity="center"
-                    android:minWidth="38dp"
-                    android:paddingHorizontal="5dp"
                     android:text="⌨"
                     android:textColor="@color/text_primary"
-                    android:textSize="17sp" />
+                    android:textSize="18sp" />
 
                 <TextView
                     android:id="@+id/btnBackFromExtras"
-                    android:layout_width="wrap_content"
-                    android:layout_height="36dp"
-                    android:layout_marginHorizontal="2dp"
+                    android:layout_width="30dp"
+                    android:layout_height="42dp"
                     android:gravity="center"
-                    android:minWidth="22dp"
+                    android:contentDescription="Back to basic controls"
                     android:text="‹"
                     android:textColor="@color/text_secondary"
-                    android:textSize="25sp"
-                    android:contentDescription="Back to basic controls" />
+                    android:textSize="27sp" />
             </LinearLayout>
         </FrameLayout>
 
         <TextView
+            android:id="@+id/btnMinimize"
+            android:layout_width="27dp"
+            android:layout_height="36dp"
+            android:layout_marginStart="5dp"
+            android:background="@android:color/transparent"
+            android:contentDescription="Minimize to floating button"
+            android:gravity="center"
+            android:text="⌄"
+            android:textColor="@color/text_secondary"
+            android:textSize="23sp" />
+
+        <TextView
             android:id="@+id/btnExpand"
-            android:layout_width="30dp"
-            android:layout_height="40dp"
-            android:layout_marginStart="2dp"
+            android:layout_width="24dp"
+            android:layout_height="36dp"
             android:background="@android:color/transparent"
             android:contentDescription="Expand text input and transcript"
             android:gravity="center"
             android:text="⌃"
             android:textColor="@color/text_secondary"
-            android:textSize="20sp"
-            android:textStyle="normal" />
+            android:textSize="21sp" />
     </LinearLayout>
+
+    <FrameLayout
+        android:id="@+id/minimizedBubble"
+        android:layout_width="54dp"
+        android:layout_height="54dp"
+        android:layout_gravity="end"
+        android:background="@drawable/floating_orb"
+        android:contentDescription="Restore Gemini Live floating bar"
+        android:visibility="gone">
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:text="≋"
+            android:textColor="@color/accent"
+            android:textSize="29sp"
+            android:textStyle="bold" />
+    </FrameLayout>
 
     <LinearLayout
         android:id="@+id/cameraPreviewPanel"
@@ -182,9 +224,8 @@
         android:background="@drawable/action_chip"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:padding="6dp"
+        android:padding="7dp"
         android:visibility="gone">
-
         <androidx.camera.view.PreviewView
             android:id="@+id/cameraPreview"
             android:layout_width="112dp"
@@ -192,14 +233,12 @@
             android:contentDescription="Live low-resolution camera preview"
             app:implementationMode="compatible"
             app:scaleType="fillCenter" />
-
         <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginStart="10dp"
             android:layout_weight="1"
             android:orientation="vertical">
-
             <TextView
                 android:id="@+id/tvCameraStatus"
                 android:layout_width="match_parent"
@@ -207,7 +246,6 @@
                 android:text="Starting camera…"
                 android:textColor="@color/text_secondary"
                 android:textSize="11sp" />
-
             <TextView
                 android:id="@+id/btnCaptureCamera"
                 android:layout_width="match_parent"
@@ -220,7 +258,6 @@
                 android:textColor="@color/accent"
                 android:textSize="11sp"
                 android:textStyle="bold" />
-
             <TextView
                 android:id="@+id/btnCloseCamera"
                 android:layout_width="match_parent"
@@ -238,7 +275,6 @@
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:visibility="gone">
-
         <TextView
             android:id="@+id/tvStatus"
             android:layout_width="match_parent"
@@ -247,7 +283,6 @@
             android:text="Connecting to Gemini Live…"
             android:textColor="@color/text_secondary"
             android:textSize="11sp" />
-
         <ScrollView
             android:id="@+id/responseScroll"
             android:layout_width="match_parent"
@@ -258,13 +293,12 @@
                 android:id="@+id/tvResponse"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:padding="4dp"
+                android:lineSpacingExtra="3dp"
+                android:padding="8dp"
                 android:text="Live transcript appears here."
                 android:textColor="@color/text_primary"
-                android:textSize="13sp"
-                android:lineSpacingExtra="3dp" />
+                android:textSize="13sp" />
         </ScrollView>
-
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -287,15 +321,15 @@
                 android:textSize="14sp" />
             <TextView
                 android:id="@+id/btnSend"
-                android:layout_width="40dp"
-                android:layout_height="42dp"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
                 android:layout_marginStart="7dp"
                 android:background="@drawable/floating_orb"
                 android:contentDescription="Send text to Gemini Live"
                 android:gravity="center"
                 android:text="↑"
                 android:textColor="@color/accent"
-                android:textSize="22sp" />
+                android:textSize="23sp" />
         </LinearLayout>
     </LinearLayout>
 </LinearLayout>

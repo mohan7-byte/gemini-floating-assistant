@@ -29,7 +29,8 @@ class GeminiLiveSession(
     context: Context,
     private val apiKey: String,
     modelId: String,
-    private val callbacks: Callbacks
+    private val callbacks: Callbacks,
+    private val dictationOnly: Boolean = false
 ) {
     interface Callbacks {
         fun onStatus(message: String)
@@ -74,16 +75,23 @@ class GeminiLiveSession(
                 // Use the schema for the model itself: audio modality and voice belong
                 // under generationConfig. This matches Google's Gemini 3.8 Live model
                 // example and BidiGenerateContentSetup schema.
+                val generationConfig = JSONObject()
+                    .put("responseModalities", JSONArray().put(if (dictationOnly) "TEXT" else "AUDIO"))
+                if (!dictationOnly) {
+                    generationConfig.put("speechConfig", JSONObject().put("voiceConfig", JSONObject()
+                        .put("prebuiltVoiceConfig", JSONObject().put("voiceName", "Puck"))))
+                }
+                val instruction = if (dictationOnly) {
+                    "Transcription-only voice keyboard. The user's audio is text they intend to type. Do not answer, summarize, format, or speak back. Only provide input audio transcription events."
+                } else {
+                    "You are a helpful, concise personal voice assistant. Reply naturally in spoken conversation. Do not claim to see the user's screen unless they explicitly share a screenshot."
+                }
                 val setup = JSONObject().put("setup", JSONObject()
                     .put("model", "models/$model")
-                    .put("generationConfig", JSONObject()
-                        .put("responseModalities", JSONArray().put("AUDIO"))
-                        .put("speechConfig", JSONObject().put("voiceConfig", JSONObject()
-                            .put("prebuiltVoiceConfig", JSONObject().put("voiceName", "Puck")))))
+                    .put("generationConfig", generationConfig)
                     .put("inputAudioTranscription", JSONObject())
                     .put("outputAudioTranscription", JSONObject())
-                    .put("systemInstruction", JSONObject().put("parts", JSONArray().put(JSONObject().put("text",
-                        "You are a helpful, concise personal voice assistant. Reply naturally in spoken conversation. Do not claim to see the user's screen unless they explicitly share a screenshot.")))))
+                    .put("systemInstruction", JSONObject().put("parts", JSONArray().put(JSONObject().put("text", instruction)))))
                 if (!webSocket.send(setup.toString())) {
                     fail("Gemini Live session configuration could not be sent. Check network access and retry.")
                 } else {
@@ -106,10 +114,10 @@ class GeminiLiveSession(
                         setupTimeout = null
                         ready = true
                         try {
-                            startPlayback()
+                            if (!dictationOnly) startPlayback()
                             startMicrophone()
                             callbacks.onReady()
-                            callbacks.onStatus("Live · Listening with $model")
+                            callbacks.onStatus(if (dictationOnly) "Live dictation · Listening" else "Live · Listening with $model")
                         } catch (e: Exception) {
                             callbacks.onEnded("Could not start microphone/audio: ${e.message ?: "permission or audio-device error"}")
                             close()
@@ -128,12 +136,14 @@ class GeminiLiveSession(
                         return
                     }
                     val inputTranscript = server.optJSONObject("inputTranscription")?.optString("text").orEmpty()
-                    if (inputTranscript.isNotBlank()) callbacks.onTranscript("You: $inputTranscript", false)
+                    if (inputTranscript.isNotBlank()) {
+                        callbacks.onTranscript(if (dictationOnly) inputTranscript else "You: $inputTranscript", false)
+                    }
                     val outputTranscript = server.optJSONObject("outputTranscription")?.optString("text").orEmpty()
-                    if (outputTranscript.isNotBlank()) callbacks.onTranscript("Gemini: $outputTranscript", true)
+                    if (!dictationOnly && outputTranscript.isNotBlank()) callbacks.onTranscript("Gemini: $outputTranscript", true)
 
-                    // Process every returned part. Audio stays audible when only the mic is muted.
-                    val parts = server.optJSONObject("modelTurn")?.optJSONArray("parts")
+                    // Dictation uses only input transcription; ignore generated response payloads.
+                    val parts = if (dictationOnly) null else server.optJSONObject("modelTurn")?.optJSONArray("parts")
                     if (parts != null) for (i in 0 until parts.length()) {
                         val part = parts.optJSONObject(i) ?: continue
                         val inline = part.optJSONObject("inlineData") ?: part.optJSONObject("inline_data")
@@ -146,7 +156,7 @@ class GeminiLiveSession(
                             }
                         }
                     }
-                    if (server.optBoolean("turnComplete", false)) callbacks.onStatus("Live · Ready for you")
+                    if (server.optBoolean("turnComplete", false) && !dictationOnly) callbacks.onStatus("Live · Ready for you")
                 } catch (e: Exception) {
                     callbacks.onStatus("Couldn't read Live response: ${e.message ?: "invalid response"}")
                 }

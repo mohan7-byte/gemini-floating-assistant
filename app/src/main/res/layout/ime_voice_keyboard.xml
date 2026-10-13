@@ -2,47 +2,79 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="@color/panel"
+    android:background="@drawable/panel_background"
+    android:elevation="12dp"
     android:orientation="vertical"
-    android:padding="14dp">
+    android:paddingHorizontal="18dp"
+    android:paddingTop="16dp"
+    android:paddingBottom="18dp">
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:gravity="center_vertical"
         android:orientation="horizontal">
-        <TextView
+        <FrameLayout
+            android:layout_width="38dp"
+            android:layout_height="38dp"
+            android:background="@drawable/floating_orb">
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:text="≋"
+                android:textColor="@color/accent"
+                android:textSize="23sp"
+                android:textStyle="bold" />
+        </FrameLayout>
+        <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
             android:layout_weight="1"
-            android:text="GEMINI FLOAT VOICE"
-            android:textColor="@color/accent"
-            android:textSize="12sp"
-            android:textStyle="bold" />
+            android:orientation="vertical">
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Gemini Float"
+                android:textColor="@color/text_primary"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:text="Live voice typing"
+                android:textColor="@color/accent"
+                android:textSize="11sp" />
+        </LinearLayout>
         <Button
             android:id="@+id/btnHideKeyboard"
             android:layout_width="wrap_content"
             android:layout_height="36dp"
             android:minHeight="36dp"
+            android:background="@drawable/action_chip"
             android:text="Done"
-            android:textAllCaps="false" />
+            android:textAllCaps="false"
+            android:textColor="@color/text_primary" />
     </LinearLayout>
     <TextView
         android:id="@+id/imeStatus"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="6dp"
-        android:text="Tap Dictate to enter formatted text into the focused app."
+        android:layout_marginTop="12dp"
+        android:text="Tap Start live dictation. Words will appear as you speak."
         android:textColor="@color/text_secondary"
         android:textSize="12sp" />
     <Button
         android:id="@+id/btnDictate"
         android:layout_width="match_parent"
         android:layout_height="54dp"
-        android:layout_marginTop="10dp"
-        android:backgroundTint="@color/accent"
-        android:text="●  Dictate"
+        android:layout_marginTop="12dp"
+        android:background="@drawable/action_chip"
+        android:backgroundTint="@color/accent_dark"
+        android:text="●  Start live dictation"
         android:textAllCaps="false"
-        android:textColor="@color/ink"
-        android:textSize="16sp"
+        android:textColor="@color/accent"
+        android:textSize="15sp"
         android:textStyle="bold" />
 </LinearLayout>
