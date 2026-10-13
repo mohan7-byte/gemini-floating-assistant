@@ -62,7 +62,7 @@ class GeminiLiveSession(
         callbacks.onStatus("Connecting to $model…")
         val timeout = Runnable {
             if (!closed && !ready) {
-                fail("Timed out waiting for Gemini Live setup. Check that the API key is valid, the model is enabled for Live API, and your network allows WebSockets.")
+                fail("Gemini accepted the WebSocket transport but did not acknowledge the Live setup within 15 seconds. Check model access/API-key restrictions, and make sure the installed APK contains the latest fix.")
             }
         }
         setupTimeout = timeout
@@ -70,18 +70,24 @@ class GeminiLiveSession(
         socket = client.newWebSocket(Request.Builder().url(url).build(), object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 if (closed) { webSocket.cancel(); return }
-                callbacks.onStatus("WebSocket connected · configuring Gemini Live…")
+                callbacks.onStatus("Secure WebSocket opened · sending Live session configuration…")
+                // Use the schema for the model itself: audio modality and voice belong
+                // under generationConfig. This matches Google's Gemini 3.8 Live model
+                // example and BidiGenerateContentSetup schema.
                 val setup = JSONObject().put("setup", JSONObject()
                     .put("model", "models/$model")
-                    // Match Google's current raw-WebSocket Live quick-start: modalities
-                    // are top-level setup fields for the direct WebSocket protocol.
-                    .put("responseModalities", JSONArray().put("AUDIO"))
+                    .put("generationConfig", JSONObject()
+                        .put("responseModalities", JSONArray().put("AUDIO"))
+                        .put("speechConfig", JSONObject().put("voiceConfig", JSONObject()
+                            .put("prebuiltVoiceConfig", JSONObject().put("voiceName", "Puck")))))
                     .put("inputAudioTranscription", JSONObject())
                     .put("outputAudioTranscription", JSONObject())
                     .put("systemInstruction", JSONObject().put("parts", JSONArray().put(JSONObject().put("text",
                         "You are a helpful, concise personal voice assistant. Reply naturally in spoken conversation. Do not claim to see the user's screen unless they explicitly share a screenshot.")))))
                 if (!webSocket.send(setup.toString())) {
-                    fail("Gemini Live setup message could not be sent. Check network access and retry.")
+                    fail("Gemini Live session configuration could not be sent. Check network access and retry.")
+                } else {
+                    callbacks.onStatus("Configuration sent · waiting for Gemini Live acknowledgement…")
                 }
             }
 
@@ -110,7 +116,17 @@ class GeminiLiveSession(
                         }
                         return
                     }
-                    val server = root.optJSONObject("serverContent") ?: return
+                    val server = root.optJSONObject("serverContent")
+                    if (server == null) {
+                        // Don't silently ignore unexpected protocol frames during setup.
+                        if (!ready) {
+                            val fields = mutableListOf<String>()
+                            val fieldIterator = root.keys()
+                            while (fieldIterator.hasNext()) fields += fieldIterator.next()
+                            callbacks.onStatus("Waiting for Live setup acknowledgement · server sent: ${fields.joinToString().ifBlank { "unrecognized message" }}")
+                        }
+                        return
+                    }
                     val inputTranscript = server.optJSONObject("inputTranscription")?.optString("text").orEmpty()
                     if (inputTranscript.isNotBlank()) callbacks.onTranscript("You: $inputTranscript", false)
                     val outputTranscript = server.optJSONObject("outputTranscription")?.optString("text").orEmpty()
