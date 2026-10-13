@@ -15,7 +15,7 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import android.view.Gravity
-import android.view.InputMethodManager
+import android.view.inputmethod.InputMethodManager
 import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.MotionEvent
