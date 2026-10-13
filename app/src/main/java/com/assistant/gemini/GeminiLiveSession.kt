@@ -222,7 +222,7 @@ class GeminiLiveSession(
         callbacks.onEnded(message)
     }
 
-    fun sendImage(bitmap: Bitmap) {
+    fun sendImage(bitmap: Bitmap, question: String = "Please look at the screenshot I just shared and help me with what is visible on it.") {
         if (closed || !ready) {
             callbacks.onStatus("Connect to Gemini Live before capturing a screenshot.")
             return
@@ -236,7 +236,7 @@ class GeminiLiveSession(
             val imageMessage = JSONObject().put("realtimeInput", JSONObject().put("video", JSONObject()
                 .put("mimeType", "image/jpeg").put("data", Base64.encodeToString(bytes, Base64.NO_WRAP))))
             if (socket?.send(imageMessage.toString()) == true) {
-                sendText("Please look at the screenshot I just shared and help me with what is visible on it.")
+                sendText(question.trim().ifBlank { "Please look at the image I just shared and help me with what is visible." })
                 callbacks.onStatus("Screenshot sent to Gemini Live")
             } else callbacks.onStatus("Could not send screenshot. Check the Live connection.")
         } catch (e: Exception) {

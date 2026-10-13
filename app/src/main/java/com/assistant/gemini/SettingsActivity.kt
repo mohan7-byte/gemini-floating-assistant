@@ -13,7 +13,11 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 
 class SettingsActivity : AppCompatActivity() {
-    companion object { private const val REQUEST_MICROPHONE = 702 }
+    companion object {
+        private const val REQUEST_MICROPHONE = 702
+        private const val REQUEST_VOICE_KEYBOARD_MICROPHONE = 703
+    }
+
     private val legacyNonLiveModels = setOf(
         "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-pro",
         "gemini-3-flash-preview", "gemini-3-pro-preview"
@@ -30,8 +34,9 @@ class SettingsActivity : AppCompatActivity() {
         model.setText(if (storedModel.isBlank() || storedModel in legacyNonLiveModels) "gemini-3.8-live" else storedModel)
 
         findViewById<Button>(R.id.btnSave).setOnClickListener {
-            saveSettings(apiKey, model) ?: return@setOnClickListener
-            Toast.makeText(this, "Settings saved securely on this device", Toast.LENGTH_SHORT).show()
+            if (saveSettings(apiKey, model) != null) {
+                Toast.makeText(this, "Settings saved securely on this device", Toast.LENGTH_SHORT).show()
+            }
         }
 
         findViewById<Button>(R.id.btnGrantOverlay).setOnClickListener {
@@ -43,6 +48,18 @@ class SettingsActivity : AppCompatActivity() {
         findViewById<Button>(R.id.btnGrantAccessibility).setOnClickListener {
             startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
             Toast.makeText(this, "Enable Gemini Float Shortcut to use double-press Volume Down", Toast.LENGTH_LONG).show()
+        }
+
+        findViewById<Button>(R.id.btnVoiceKeyboardSetup).setOnClickListener {
+            saveSettings(apiKey, model) ?: return@setOnClickListener
+            if (apiKey.text.toString().isBlank()) {
+                apiKey.error = "Paste your Google AI Studio API key first"
+                return@setOnClickListener
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
+                checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), REQUEST_VOICE_KEYBOARD_MICROPHONE)
+            } else openVoiceKeyboardSettings()
         }
 
         findViewById<Button>(R.id.btnShowOrb).setOnClickListener {
@@ -57,7 +74,8 @@ class SettingsActivity : AppCompatActivity() {
                 Toast.makeText(this, "Allow display over other apps, then tap Open Live assistant again", Toast.LENGTH_LONG).show()
                 return@setOnClickListener
             }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
+                checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
                 requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), REQUEST_MICROPHONE)
                 return@setOnClickListener
             }
@@ -74,8 +92,14 @@ class SettingsActivity : AppCompatActivity() {
         SecurePrefs.get(this).edit()
             .putString("api_key", apiKey.text.toString().trim())
             .putString("model", modelId)
+            .putString("voice_keyboard_model", "gemini-3.8-flash")
             .apply()
         return modelId
+    }
+
+    private fun openVoiceKeyboardSettings() {
+        Toast.makeText(this, "Enable Gemini Float Voice Keyboard, then choose it from your keyboard switcher.", Toast.LENGTH_LONG).show()
+        startActivity(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS))
     }
 
     private fun openLiveAssistant() {
@@ -90,9 +114,12 @@ class SettingsActivity : AppCompatActivity() {
     @Deprecated("Permission callback retained for API 26 compatibility")
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == REQUEST_MICROPHONE) {
-            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) openLiveAssistant()
-            else Toast.makeText(this, "Microphone permission is needed for Gemini Live voice.", Toast.LENGTH_LONG).show()
+        val granted = grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED
+        when (requestCode) {
+            REQUEST_MICROPHONE -> if (granted) openLiveAssistant()
+                else Toast.makeText(this, "Microphone permission is needed for Gemini Live voice.", Toast.LENGTH_LONG).show()
+            REQUEST_VOICE_KEYBOARD_MICROPHONE -> if (granted) openVoiceKeyboardSettings()
+                else Toast.makeText(this, "Microphone permission is needed for voice typing.", Toast.LENGTH_LONG).show()
         }
     }
 }
