@@ -602,7 +602,7 @@ class AssistantAccessibilityService : AccessibilityService() {
                 view.findViewById<View>(R.id.minimizedBubble).visibility = View.GONE
                 view.findViewById<View>(R.id.headerDivider).visibility = View.VISIBLE
                 view.setBackgroundResource(R.drawable.panel_background)
-                view.setPadding(dp(18), dp(8), dp(18), dp(8))
+                view.setPadding(dp(24), dp(8), dp(24), dp(8))
                 panelLayoutParams?.apply {
                     width = WindowManager.LayoutParams.MATCH_PARENT
                     gravity = Gravity.BOTTOM
