@@ -20,6 +20,7 @@ class VoiceKeyboardService : InputMethodService() {
     private var dictateButton: Button? = null
     @Volatile private var liveSession: GeminiLiveSession? = null
     @Volatile private var lastTranscriptChunk = ""
+    @Volatile private var composingPrefix = ""
 
     override fun onCreateInputView(): View {
         val view = layoutInflater.inflate(R.layout.ime_voice_keyboard, null)
@@ -63,7 +64,7 @@ class VoiceKeyboardService : InputMethodService() {
         val session = GeminiLiveSession(
             this,
             key,
-            "gemini-3.8-live",
+            "gemini-3.5-transcribe-live",
             object : GeminiLiveSession.Callbacks {
                 override fun onStatus(message: String) {
                     if (recording) showStatus(message)
@@ -73,19 +74,32 @@ class VoiceKeyboardService : InputMethodService() {
                     showStatus("Listening · words appear as you speak")
                 }
 
-                override fun onTranscript(message: String, isAssistant: Boolean) {
+                override fun onTranscript(message: String, isAssistant: Boolean, isInterim: Boolean) {
                     if (isAssistant || !recording || message.isBlank()) return
-                    val delta = synchronized(this@VoiceKeyboardService) {
-                        val previous = lastTranscriptChunk
-                        lastTranscriptChunk = message
-                        transcriptionDelta(previous, message)
-                    }
-                    if (delta.isNotBlank()) {
-                        mainHandler.post {
-                            if (recording) {
-                                val needsSpace = shouldInsertSpace(connection, delta)
-                                connection.commitText((if (needsSpace) " " else "") + delta, 1)
+                    mainHandler.post {
+                        if (!recording) return@post
+                        val activeConnection = currentInputConnection ?: return@post
+                        val normalized = message.trim()
+                        if (normalized.isBlank()) return@post
+                        if (isInterim) {
+                            if (lastTranscriptChunk.isBlank()) {
+                                val before = activeConnection.getTextBeforeCursor(1, 0)?.lastOrNull()
+                                composingPrefix = if (before != null && !before.isWhitespace() && before !in "([{\\n\\r") " " else ""
                             }
+                            lastTranscriptChunk = normalized
+                            activeConnection.setComposingText(composingPrefix + normalized, 1)
+                            showStatus("Listening · $normalized")
+                        } else {
+                            val finalText = if (lastTranscriptChunk.isNotBlank()) {
+                                composingPrefix + normalized
+                            } else {
+                                val before = activeConnection.getTextBeforeCursor(1, 0)?.lastOrNull()
+                                (if (before != null && !before.isWhitespace() && before !in "([{\\n\\r") " " else "") + normalized
+                            }
+                            activeConnection.commitText(finalText, 1)
+                            lastTranscriptChunk = ""
+                            composingPrefix = ""
+                            showStatus("Inserted · $normalized")
                         }
                     }
                 }
@@ -93,8 +107,11 @@ class VoiceKeyboardService : InputMethodService() {
                 override fun onEnded(message: String) {
                     mainHandler.post {
                         val wasUserStop = intentionalStop
+                        currentInputConnection?.finishComposingText()
                         recording = false
                         liveSession = null
+                        lastTranscriptChunk = ""
+                        composingPrefix = ""
                         dictateButton?.text = "●  Start live dictation"
                         showStatus(if (wasUserStop) "Dictation stopped · text kept in place" else message)
                     }
@@ -110,39 +127,14 @@ class VoiceKeyboardService : InputMethodService() {
         if (!recording && liveSession == null) return
         intentionalStop = true
         recording = false
+        currentInputConnection?.finishComposingText()
         val session = liveSession
         liveSession = null
         session?.close()
         dictateButton?.text = "●  Start live dictation"
         showStatus("Dictation stopped · text kept in place")
         lastTranscriptChunk = ""
-    }
-
-    private fun shouldInsertSpace(connection: android.view.inputmethod.InputConnection, delta: String): Boolean {
-        val first = delta.firstOrNull() ?: return false
-        if (first.isWhitespace() || first in ".,!?;:%)]}") return false
-        val before = connection.getTextBeforeCursor(1, 0)?.lastOrNull() ?: return false
-        return !before.isWhitespace() && before !in "([{\n\r"
-    }
-
-    /**
-     * Live transcription can arrive either as independent fragments or as a growing
-     * partial. Convert a growing partial to just its suffix and trim a small overlap
-     * between adjacent fragments so words are not duplicated in the target field.
-     */
-    private fun transcriptionDelta(previous: String, current: String): String {
-        val next = current.trim()
-        if (next.isBlank() || next == previous.trim()) return ""
-        if (previous.isBlank()) return next
-        val old = previous.trim()
-        if (next.startsWith(old)) return next.substring(old.length).trimStart()
-        val maxOverlap = minOf(old.length, next.length, 100)
-        for (overlap in maxOverlap downTo 1) {
-            if (old.takeLast(overlap).equals(next.take(overlap), ignoreCase = true)) {
-                return next.substring(overlap).trimStart()
-            }
-        }
-        return next
+        composingPrefix = ""
     }
 
     private fun showStatus(message: String) {

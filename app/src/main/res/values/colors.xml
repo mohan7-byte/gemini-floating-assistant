@@ -1,11 +1,11 @@
 <resources>
     <color name="ink">#101115</color>
-    <color name="panel">#1B1D24</color>
-    <color name="panel_elevated">#252833</color>
+    <color name="panel">#191B21</color>
+    <color name="panel_elevated">#252831</color>
     <color name="accent">#A7F3D0</color>
     <color name="accent_dark">#164E42</color>
     <color name="text_primary">#F5F6F8</color>
     <color name="text_secondary">#A8ACB8</color>
-    <color name="outline">#363A46</color>
+    <color name="outline">#3A414A</color>
     <color name="danger">#FFB4AB</color>
 </resources>

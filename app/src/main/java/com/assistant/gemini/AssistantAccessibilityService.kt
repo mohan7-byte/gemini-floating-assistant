@@ -23,6 +23,7 @@ import android.view.View
 import android.view.WindowManager
 import android.view.inputmethod.EditorInfo
 import android.widget.EditText
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -162,7 +163,15 @@ class AssistantAccessibilityService : AccessibilityService() {
         view.findViewById<View>(R.id.btnExpand).setOnClickListener {
             panelExpanded = !panelExpanded
             view.findViewById<LinearLayout>(R.id.expandedContent).visibility = if (panelExpanded) View.VISIBLE else View.GONE
-            view.findViewById<TextView>(R.id.btnExpand).text = if (panelExpanded) "⌄" else "⌃"
+            view.findViewById<ImageView>(R.id.btnExpand).setImageResource(if (panelExpanded) R.drawable.ic_chevron_down else R.drawable.ic_chevron_up)
+            if (panelExpanded) view.findViewById<ScrollView>(R.id.responseScroll).post {
+                view.findViewById<ScrollView>(R.id.responseScroll).fullScroll(View.FOCUS_DOWN)
+            }
+            updatePanelLayout()
+        }
+        view.findViewById<View>(R.id.headerInfo).setOnClickListener {
+            panelExpanded = !panelExpanded
+            view.findViewById<LinearLayout>(R.id.expandedContent).visibility = if (panelExpanded) View.VISIBLE else View.GONE
             if (panelExpanded) view.findViewById<ScrollView>(R.id.responseScroll).post {
                 view.findViewById<ScrollView>(R.id.responseScroll).fullScroll(View.FOCUS_DOWN)
             }
@@ -171,8 +180,8 @@ class AssistantAccessibilityService : AccessibilityService() {
 
         view.findViewById<View>(R.id.btnMute).setOnClickListener {
             muted = !muted
-            view.findViewById<TextView>(R.id.btnMute).apply {
-                text = if (muted) "∕" else "♩"
+            view.findViewById<ImageView>(R.id.btnMute).apply {
+                setImageResource(if (muted) R.drawable.ic_mic_off else R.drawable.ic_mic)
                 contentDescription = if (muted) "Unmute microphone" else "Mute microphone"
                 alpha = if (muted) 0.72f else 1f
             }
@@ -197,10 +206,14 @@ class AssistantAccessibilityService : AccessibilityService() {
                 MotionEvent.ACTION_DOWN -> {
                     actionSwipeStartX = event.rawX
                     actionSwipeStartY = event.rawY
+                    if (target.id != R.id.actionsPager) {
+                        target.animate().scaleX(0.94f).scaleY(0.94f).setDuration(90L).start()
+                    }
                     true
                 }
                 MotionEvent.ACTION_MOVE -> true
                 MotionEvent.ACTION_UP -> {
+                    target.animate().scaleX(1f).scaleY(1f).setDuration(140L).start()
                     val dx = event.rawX - actionSwipeStartX
                     val dy = event.rawY - actionSwipeStartY
                     if (abs(dx) > dp(38) && abs(dx) > abs(dy) * 1.2f) {
@@ -210,7 +223,10 @@ class AssistantAccessibilityService : AccessibilityService() {
                     }
                     true
                 }
-                MotionEvent.ACTION_CANCEL -> true
+                MotionEvent.ACTION_CANCEL -> {
+                    target.animate().scaleX(1f).scaleY(1f).setDuration(140L).start()
+                    true
+                }
                 else -> true
             }
         }
@@ -249,7 +265,7 @@ class AssistantAccessibilityService : AccessibilityService() {
                 status(message)
             }
 
-            override fun onTranscript(message: String, isAssistant: Boolean) { appendTranscript(message, isAssistant) }
+            override fun onTranscript(message: String, isAssistant: Boolean, isInterim: Boolean) { if (!isInterim) appendTranscript(message, isAssistant) }
 
             override fun onReady() {
                 setIndicatorConnected()
@@ -267,7 +283,7 @@ class AssistantAccessibilityService : AccessibilityService() {
                     setIndicatorError()
                     panelExpanded = true
                     view.findViewById<LinearLayout>(R.id.expandedContent).visibility = View.VISIBLE
-                    view.findViewById<TextView>(R.id.btnExpand).text = "⌄"
+                    view.findViewById<ImageView>(R.id.btnExpand).setImageResource(R.drawable.ic_chevron_down)
                     view.findViewById<TextView>(R.id.tvStatus).text = message
                     view.findViewById<TextView>(R.id.tvResponse).text =
                         "Gemini Live did not start.\n\n$message\n\nCheck the API key, Live model access, and network, then disconnect and launch again."
@@ -376,7 +392,7 @@ class AssistantAccessibilityService : AccessibilityService() {
             if (!panelExpanded) {
                 panelExpanded = true
                 panelView?.findViewById<LinearLayout>(R.id.expandedContent)?.visibility = View.VISIBLE
-                panelView?.findViewById<TextView>(R.id.btnExpand)?.text = "⌄"
+                panelView?.findViewById<ImageView>(R.id.btnExpand)?.setImageResource(R.drawable.ic_chevron_down)
                 updatePanelLayout()
             }
         }
@@ -413,7 +429,7 @@ class AssistantAccessibilityService : AccessibilityService() {
             if (!panelExpanded) {
                 panelExpanded = true
                 panelView?.findViewById<LinearLayout>(R.id.expandedContent)?.visibility = View.VISIBLE
-                panelView?.findViewById<TextView>(R.id.btnExpand)?.text = "⌄"
+                panelView?.findViewById<ImageView>(R.id.btnExpand)?.setImageResource(R.drawable.ic_chevron_down)
                 updatePanelLayout()
             }
         }
@@ -445,7 +461,7 @@ class AssistantAccessibilityService : AccessibilityService() {
             if (!panelExpanded) {
                 panelExpanded = true
                 panelView?.findViewById<LinearLayout>(R.id.expandedContent)?.visibility = View.VISIBLE
-                panelView?.findViewById<TextView>(R.id.btnExpand)?.text = "⌄"
+                panelView?.findViewById<ImageView>(R.id.btnExpand)?.setImageResource(R.drawable.ic_chevron_down)
                 updatePanelLayout()
             }
         }
@@ -554,6 +570,7 @@ class AssistantAccessibilityService : AccessibilityService() {
         view.findViewById<LinearLayout>(R.id.topBar).animate().alpha(0f).setDuration(120L).withEndAction {
             if (panelView !== view || !panelMinimized) return@withEndAction
             view.findViewById<LinearLayout>(R.id.topBar).visibility = View.GONE
+            view.findViewById<View>(R.id.headerDivider).visibility = View.GONE
             view.findViewById<LinearLayout>(R.id.expandedContent).visibility = View.GONE
             view.findViewById<LinearLayout>(R.id.cameraPreviewPanel).visibility = View.GONE
             view.findViewById<View>(R.id.minimizedBubble).apply {
@@ -583,6 +600,7 @@ class AssistantAccessibilityService : AccessibilityService() {
             .setDuration(100L).withEndAction {
                 if (panelView !== view || panelMinimized) return@withEndAction
                 view.findViewById<View>(R.id.minimizedBubble).visibility = View.GONE
+                view.findViewById<View>(R.id.headerDivider).visibility = View.VISIBLE
                 view.setBackgroundResource(R.drawable.panel_background)
                 view.setPadding(dp(18), dp(8), dp(18), dp(8))
                 panelLayoutParams?.apply {

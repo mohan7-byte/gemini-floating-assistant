@@ -34,7 +34,7 @@ class GeminiLiveSession(
 ) {
     interface Callbacks {
         fun onStatus(message: String)
-        fun onTranscript(message: String, isAssistant: Boolean)
+        fun onTranscript(message: String, isAssistant: Boolean, isInterim: Boolean = false)
         fun onReady()
         fun onEnded(message: String)
     }
@@ -81,17 +81,18 @@ class GeminiLiveSession(
                     generationConfig.put("speechConfig", JSONObject().put("voiceConfig", JSONObject()
                         .put("prebuiltVoiceConfig", JSONObject().put("voiceName", "Puck"))))
                 }
-                val instruction = if (dictationOnly) {
-                    "Transcription-only voice keyboard. The user's audio is text they intend to type. Do not answer, summarize, format, or speak back. Only provide input audio transcription events."
-                } else {
-                    "You are a helpful, concise personal voice assistant. Reply naturally in spoken conversation. Do not claim to see the user's screen unless they explicitly share a screenshot."
-                }
-                val setup = JSONObject().put("setup", JSONObject()
+                val setupConfig = JSONObject()
                     .put("model", "models/$model")
                     .put("generationConfig", generationConfig)
-                    .put("inputAudioTranscription", JSONObject())
-                    .put("outputAudioTranscription", JSONObject())
-                    .put("systemInstruction", JSONObject().put("parts", JSONArray().put(JSONObject().put("text", instruction)))))
+                    .put("inputAudioTranscription", JSONObject()
+                        .put("languageCodes", JSONArray())
+                        .put("mode", "VERBATIM"))
+                if (!dictationOnly) {
+                    setupConfig.put("outputAudioTranscription", JSONObject())
+                    setupConfig.put("systemInstruction", JSONObject().put("parts", JSONArray().put(JSONObject().put("text",
+                        "You are a helpful, concise personal voice assistant. Reply naturally in spoken conversation. Do not claim to see the user's screen unless they explicitly share a screenshot."))))
+                }
+                val setup = JSONObject().put("setup", setupConfig)
                 if (!webSocket.send(setup.toString())) {
                     fail("Gemini Live session configuration could not be sent. Check network access and retry.")
                 } else {
@@ -135,13 +136,12 @@ class GeminiLiveSession(
                         }
                         return
                     }
+                    val interimTranscript = server.optJSONObject("interimInputTranscription")?.optString("text").orEmpty()
+                    if (dictationOnly && interimTranscript.isNotBlank()) callbacks.onTranscript(interimTranscript, false, true)
                     val inputTranscript = server.optJSONObject("inputTranscription")?.optString("text").orEmpty()
-                    if (inputTranscript.isNotBlank()) {
-                        callbacks.onTranscript(if (dictationOnly) inputTranscript else "You: $inputTranscript", false)
-                    }
+                    if (inputTranscript.isNotBlank()) callbacks.onTranscript(if (dictationOnly) inputTranscript else "You: $inputTranscript", false, false)
                     val outputTranscript = server.optJSONObject("outputTranscription")?.optString("text").orEmpty()
-                    if (!dictationOnly && outputTranscript.isNotBlank()) callbacks.onTranscript("Gemini: $outputTranscript", true)
-
+                    if (!dictationOnly && outputTranscript.isNotBlank()) callbacks.onTranscript("Gemini: $outputTranscript", true, false)
                     // Dictation uses only input transcription; ignore generated response payloads.
                     val parts = if (dictationOnly) null else server.optJSONObject("modelTurn")?.optJSONArray("parts")
                     if (parts != null) for (i in 0 until parts.length()) {
