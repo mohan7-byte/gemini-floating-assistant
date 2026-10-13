@@ -320,7 +320,7 @@ class GeminiLiveSession(
     }
 
     private fun resumeMicrophoneAfterPlayback() {
-        if (closed || dictationOnly || !turnCompleteSeen) return
+        if (closed || dictationOnly || !assistantSpeaking || !turnCompleteSeen) return
         mainHandler.postDelayed({
             if (closed || !turnCompleteSeen || !outputQueue.isEmpty() || playbackBusy) return@postDelayed
             assistantSpeaking = false
