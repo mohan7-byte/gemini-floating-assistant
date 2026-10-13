@@ -1,80 +1,31 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="match_parent"
-    android:layout_height="wrap_content"
-    android:background="@drawable/panel_background"
-    android:elevation="12dp"
-    android:orientation="vertical"
-    android:paddingHorizontal="18dp"
-    android:paddingTop="16dp"
-    android:paddingBottom="18dp">
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="center_vertical"
-        android:orientation="horizontal">
-        <FrameLayout
-            android:layout_width="38dp"
-            android:layout_height="38dp"
-            android:background="@drawable/floating_orb">
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:gravity="center"
-                android:text="≋"
-                android:textColor="@color/accent"
-                android:textSize="23sp"
-                android:textStyle="bold" />
+    android:layout_width="match_parent" android:layout_height="wrap_content"
+    android:background="@drawable/panel_background" android:elevation="12dp"
+    android:orientation="vertical" android:paddingHorizontal="12dp" android:paddingTop="12dp" android:paddingBottom="12dp">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center_vertical" android:orientation="horizontal">
+        <FrameLayout android:layout_width="34dp" android:layout_height="34dp" android:background="@drawable/floating_orb">
+            <TextView android:layout_width="match_parent" android:layout_height="match_parent" android:gravity="center" android:text="≋" android:textColor="@color/accent" android:textSize="22sp" android:textStyle="bold" />
         </FrameLayout>
-        <LinearLayout
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="10dp"
-            android:layout_weight="1"
-            android:orientation="vertical">
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Gemini Float"
-                android:textColor="@color/text_primary"
-                android:textSize="15sp"
-                android:textStyle="bold" />
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
-                android:text="Live voice typing"
-                android:textColor="@color/accent"
-                android:textSize="11sp" />
+        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_marginStart="9dp" android:layout_weight="1" android:orientation="vertical">
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Gemini Float" android:textColor="@color/text_primary" android:textSize="15sp" android:textStyle="bold" />
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="Voice typing · Offline keys" android:textColor="@color/accent" android:textSize="11sp" />
         </LinearLayout>
-        <Button
-            android:id="@+id/btnHideKeyboard"
-            android:layout_width="wrap_content"
-            android:layout_height="36dp"
-            android:minHeight="36dp"
-            android:background="@drawable/action_chip"
-            android:text="Done"
-            android:textAllCaps="false"
-            android:textColor="@color/text_primary" />
+        <TextView android:id="@+id/btnOfflineKeyboard" android:layout_width="wrap_content" android:layout_height="36dp" android:gravity="center" android:paddingHorizontal="10dp" android:background="@drawable/action_chip" android:text="⌨ Offline" android:textColor="@color/text_primary" android:textSize="12sp" />
+        <TextView android:id="@+id/btnHideKeyboard" android:layout_width="wrap_content" android:layout_height="36dp" android:layout_marginStart="6dp" android:gravity="center" android:paddingHorizontal="10dp" android:background="@drawable/action_chip" android:text="Done" android:textColor="@color/text_primary" android:textSize="12sp" />
     </LinearLayout>
-    <TextView
-        android:id="@+id/imeStatus"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="12dp"
-        android:text="Tap Start live dictation. Words will appear as you speak."
-        android:textColor="@color/text_secondary"
-        android:textSize="12sp" />
-    <Button
-        android:id="@+id/btnDictate"
-        android:layout_width="match_parent"
-        android:layout_height="54dp"
-        android:layout_marginTop="12dp"
-        android:background="@drawable/action_chip"
-        android:backgroundTint="@color/accent_dark"
-        android:text="●  Start live dictation"
-        android:textAllCaps="false"
-        android:textColor="@color/accent"
-        android:textSize="15sp"
-        android:textStyle="bold" />
+    <LinearLayout android:id="@+id/voicePanel" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical">
+        <TextView android:id="@+id/imeStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:text="Tap Start live dictation. Words appear as you speak." android:textColor="@color/text_secondary" android:textSize="12sp" />
+        <TextView android:id="@+id/btnDictate" android:layout_width="match_parent" android:layout_height="48dp" android:layout_marginTop="10dp" android:background="@drawable/action_chip" android:backgroundTint="@color/accent_dark" android:gravity="center" android:text="●  Start live dictation" android:textColor="@color/accent" android:textSize="14sp" android:textStyle="bold" />
+        <LinearLayout android:id="@+id/quickKeysContainer" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:orientation="vertical" />
+        <TextView android:id="@+id/btnCustomizeKeys" android:layout_width="wrap_content" android:layout_height="34dp" android:layout_gravity="end" android:gravity="center" android:paddingHorizontal="10dp" android:text="+ Customize keys" android:textColor="@color/text_secondary" android:textSize="12sp" />
+    </LinearLayout>
+    <LinearLayout android:id="@+id/offlinePanel" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:visibility="gone">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center_vertical">
+            <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginTop="6dp" android:text="Works without internet" android:textColor="@color/text_secondary" android:textSize="12sp" />
+            <TextView android:id="@+id/btnLanguage" android:layout_width="44dp" android:layout_height="34dp" android:gravity="center" android:background="@drawable/action_chip" android:text="EN" android:textColor="@color/accent" android:textStyle="bold" />
+            <TextView android:id="@+id/btnBackToVoice" android:layout_width="wrap_content" android:layout_height="34dp" android:layout_marginStart="6dp" android:gravity="center" android:paddingHorizontal="10dp" android:background="@drawable/action_chip" android:text="Voice" android:textColor="@color/text_primary" />
+        </LinearLayout>
+        <LinearLayout android:id="@+id/keyboardContainer" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:orientation="vertical" />
+    </LinearLayout>
 </LinearLayout>

@@ -7,6 +7,8 @@ import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.AudioTrack
 import android.media.MediaRecorder
+import android.media.audiofx.AcousticEchoCanceler
+import android.media.audiofx.NoiseSuppressor
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
@@ -52,6 +54,11 @@ class GeminiLiveSession(
     @Volatile private var player: AudioTrack? = null
     @Volatile private var micThread: Thread? = null
     @Volatile private var playbackThread: Thread? = null
+    @Volatile private var assistantSpeaking = false
+    @Volatile private var turnCompleteSeen = false
+    @Volatile private var playbackBusy = false
+    @Volatile private var echoCanceler: AcousticEchoCanceler? = null
+    @Volatile private var noiseSuppressor: NoiseSuppressor? = null
 
     @Suppress("UNUSED_PARAMETER")
     fun connect() {
@@ -151,12 +158,24 @@ class GeminiLiveSession(
                             val mime = inline.optString("mimeType", inline.optString("mime_type"))
                             val data = inline.optString("data")
                             if (data.isNotBlank() && mime.startsWith("audio/pcm")) {
+                                // Half-duplex audio: stop sending mic frames while the assistant speaks.
+                                // This prevents speaker output being re-transcribed as fresh user input.
+                                if (!assistantSpeaking) {
+                                    assistantSpeaking = true
+                                    turnCompleteSeen = false
+                                    socket?.send(JSONObject().put("realtimeInput", JSONObject().put("audioStreamEnd", true)).toString())
+                                    stopMicrophone()
+                                }
                                 val bytes = Base64.decode(data, Base64.DEFAULT)
                                 if (!closed) outputQueue.offer(bytes)
                             }
                         }
                     }
-                    if (server.optBoolean("turnComplete", false) && !dictationOnly) callbacks.onStatus("Live · Ready for you")
+                    if (server.optBoolean("turnComplete", false) && !dictationOnly) {
+                        callbacks.onStatus("Live · Ready for you")
+                        turnCompleteSeen = true
+                        resumeMicrophoneAfterPlayback()
+                    }
                 } catch (e: Exception) {
                     callbacks.onStatus("Couldn't read Live response: ${e.message ?: "invalid response"}")
                 }
@@ -277,6 +296,8 @@ class GeminiLiveSession(
             throw IllegalStateException("microphone could not be initialized")
         }
         recorder = record
+        runCatching { echoCanceler = AcousticEchoCanceler.create(record.audioSessionId)?.apply { enabled = true } }
+        runCatching { noiseSuppressor = NoiseSuppressor.create(record.audioSessionId)?.apply { enabled = true } }
         record.startRecording()
         micThread = Thread({
             val buffer = ByteArray(3200)
@@ -298,7 +319,21 @@ class GeminiLiveSession(
         }, "GeminiLive-Microphone").apply { isDaemon = true; start() }
     }
 
+    private fun resumeMicrophoneAfterPlayback() {
+        if (closed || dictationOnly || !turnCompleteSeen) return
+        mainHandler.postDelayed({
+            if (closed || !turnCompleteSeen || !outputQueue.isEmpty() || playbackBusy) return@postDelayed
+            assistantSpeaking = false
+            turnCompleteSeen = false
+            try { startMicrophone() } catch (e: Exception) {
+                callbacks.onStatus("Could not resume microphone: " + (e.message ?: "audio error"))
+            }
+        }, 250L)
+    }
+
     private fun stopMicrophone() {
+        runCatching { echoCanceler?.release() }; echoCanceler = null
+        runCatching { noiseSuppressor?.release() }; noiseSuppressor = null
         val record = recorder
         val thread = micThread
         recorder = null
@@ -326,10 +361,19 @@ class GeminiLiveSession(
         track.play()
         playbackThread = Thread({
             while (!closed && !Thread.currentThread().isInterrupted) {
-                val chunk = try { outputQueue.poll(250, TimeUnit.MILLISECONDS) } catch (_: InterruptedException) { break } ?: continue
+                val chunk = try { outputQueue.poll(100, TimeUnit.MILLISECONDS) } catch (_: InterruptedException) { break }
+                if (chunk == null) {
+                    if (turnCompleteSeen && outputQueue.isEmpty()) resumeMicrophoneAfterPlayback()
+                    continue
+                }
                 if (closed) break
+                playbackBusy = true
                 try { track.write(chunk, 0, chunk.size, AudioTrack.WRITE_BLOCKING) }
                 catch (_: Exception) { if (!closed) callbacks.onStatus("Audio playback stopped") }
+                finally {
+                    playbackBusy = false
+                    if (turnCompleteSeen && outputQueue.isEmpty()) resumeMicrophoneAfterPlayback()
+                }
             }
         }, "GeminiLive-Playback").apply { isDaemon = true; start() }
     }
@@ -344,6 +388,10 @@ class GeminiLiveSession(
         micThread?.interrupt(); micThread = null
         playbackThread?.interrupt(); playbackThread = null
         outputQueue.clear()
+        assistantSpeaking = false
+        turnCompleteSeen = false
+        runCatching { echoCanceler?.release() }; echoCanceler = null
+        runCatching { noiseSuppressor?.release() }; noiseSuppressor = null
     }
 
     companion object {
