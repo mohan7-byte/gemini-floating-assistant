@@ -41,14 +41,19 @@ class SettingsActivity : AppCompatActivity() {
 
         findViewById<Button>(R.id.btnSetDefaultAssistant).setOnClickListener {
             try {
-                // Open Android's Digital Assistant chooser, not voice typing settings.
-                startActivity(Intent("android.settings.ASSIST_SETTINGS"))
-            } catch (_: Exception) {
-                try {
-                    startActivity(Intent(Settings.ACTION_VOICE_INPUT_SETTINGS))
-                } catch (_: Exception) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    val roleManager = getSystemService(android.app.role.RoleManager::class.java)
+                    if (roleManager.isRoleAvailable(android.app.role.RoleManager.ROLE_ASSISTANT)) {
+                        // Android presents the system-owned assistant-role chooser.
+                        startActivity(roleManager.createRequestRoleIntent(android.app.role.RoleManager.ROLE_ASSISTANT))
+                    } else {
+                        startActivity(Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS))
+                    }
+                } else {
                     startActivity(Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS))
                 }
+            } catch (_: Exception) {
+                startActivity(Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS))
             }
         }
 

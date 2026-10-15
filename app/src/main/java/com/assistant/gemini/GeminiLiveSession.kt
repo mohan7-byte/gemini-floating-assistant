@@ -174,12 +174,20 @@ class GeminiLiveSession(
                         }
                     }
                     if (server.optBoolean("turnComplete", false) && !dictationOnly) {
-                        val completeText = assistantTranscriptBuffer.toString().trim()
-                        assistantTranscriptBuffer.setLength(0)
-                        if (completeText.isNotBlank()) callbacks.onTranscript("Buddy: $completeText", true, false)
-                        callbacks.onStatus("Live · Ready for you")
-                        turnCompleteSeen = true
-                        resumeMicrophoneAfterPlayback()
+                        // Gemini 3.8 Live can report a turn boundary while background
+                        // reasoning is still running. Keep collecting transcript chunks
+                        // until interactionStatus becomes IDLE for the complete answer.
+                        val interactionStatus = server.optString("interactionStatus", "IDLE")
+                        if (!interactionStatus.equals("IN_PROGRESS", ignoreCase = true)) {
+                            val completeText = assistantTranscriptBuffer.toString().trim()
+                            assistantTranscriptBuffer.setLength(0)
+                            if (completeText.isNotBlank()) callbacks.onTranscript("Buddy: $completeText", true, false)
+                            callbacks.onStatus("Live · Ready for you")
+                            turnCompleteSeen = true
+                            resumeMicrophoneAfterPlayback()
+                        } else {
+                            callbacks.onStatus("Buddy is finishing the response…")
+                        }
                     }
                 } catch (e: Exception) {
                     callbacks.onStatus("Couldn't read Live response: ${e.message ?: "invalid response"}")
