@@ -360,7 +360,7 @@ class VoiceKeyboardService : InputMethodService() {
         val checker = spellCheckerSession ?: return
         val sequence = latestSuggestionRequest
         pendingSuggestionWords[sequence] = word
-        runCatching { checker.getSuggestions(TextInfo(word, 0, sequence), 3, false) }
+        runCatching { checker.getSuggestions(arrayOf(TextInfo(word, 0, sequence)), 3, false) }
             .onFailure { pendingSuggestionWords.remove(sequence) }
     }
 
