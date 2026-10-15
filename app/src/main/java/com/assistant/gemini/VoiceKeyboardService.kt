@@ -100,12 +100,7 @@ class VoiceKeyboardService : InputMethodService() {
         root.findViewById<View>(R.id.btnHideKeyboard).setOnClickListener { stopDictation(); requestHideSelf(0) }
         root.findViewById<View>(R.id.btnOfflineKeyboard).setOnClickListener { showOfflineKeyboard(!isOfflineKeyboard) }
         root.findViewById<View>(R.id.btnBackToVoice).setOnClickListener { showOfflineKeyboard(false) }
-        languageButton?.setOnClickListener {
-            offlineLanguage = if (offlineLanguage == "EN") "HI" else "EN"
-            numberPage = false
-            languageButton?.text = offlineLanguage
-            renderOfflineKeys()
-        }
+        languageButton?.setOnClickListener { switchLanguage() }
         root.findViewById<View>(R.id.btnCustomizeKeys).setOnClickListener { customizeKeys() }
         // Swipe down on the header/status area hides the IME; it never steals ordinary key taps.
         listOf(root.findViewById<View>(R.id.imeHeader), root.findViewById<View>(R.id.imeStatus))
@@ -209,6 +204,18 @@ class VoiceKeyboardService : InputMethodService() {
         }
     }
 
+    private fun switchLanguage() {
+        offlineLanguage = if (offlineLanguage == "EN") "HI" else "EN"
+        shifted = false
+        numberPage = false
+        languageButton?.text = offlineLanguage
+        renderOfflineKeys()
+        if (isOfflineKeyboard) {
+            openSpellChecker()
+            refreshSuggestions()
+        }
+    }
+
     private fun renderQuickKeys() {
         val container = quickKeysContainer ?: return
         container.removeAllViews()
@@ -301,13 +308,7 @@ class VoiceKeyboardService : InputMethodService() {
                         "⌫" -> deleteOne()
                         "Space" -> commit(" ")
                         "↵" -> enterKey()
-                        "🌐" -> {
-                            offlineLanguage = if (offlineLanguage == "EN") "HI" else "EN"
-                            numberPage = false
-                            shifted = false
-                            languageButton?.text = offlineLanguage
-                            renderOfflineKeys()
-                        }
+                        "🌐" -> switchLanguage()
                         "⇧" -> { shifted = !shifted; renderOfflineKeys() }
                         "?123" -> { numberPage = true; renderOfflineKeys() }
                         "ABC" -> { numberPage = false; shifted = false; renderOfflineKeys() }
