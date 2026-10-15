@@ -39,6 +39,14 @@ class SettingsActivity : AppCompatActivity() {
             }
         }
 
+        findViewById<Button>(R.id.btnSetDefaultAssistant).setOnClickListener {
+            try {
+                startActivity(Intent(Settings.ACTION_VOICE_INPUT_SETTINGS))
+            } catch (_: Exception) {
+                startActivity(Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS))
+            }
+        }
+
         findViewById<Button>(R.id.btnGrantOverlay).setOnClickListener {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
                 startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))

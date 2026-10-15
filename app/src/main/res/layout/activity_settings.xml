@@ -10,7 +10,7 @@
         android:orientation="vertical"
         android:padding="24dp">
         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-            android:text="GEMINI FLOAT" android:textColor="@color/accent" android:textStyle="bold" android:letterSpacing="0.12" android:textSize="12sp" />
+            android:text="BUDDY" android:textColor="@color/accent" android:textStyle="bold" android:letterSpacing="0.12" android:textSize="12sp" />
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_marginTop="8dp" android:text="Voice-first.\nThere when you call." android:textColor="@color/text_primary" android:textSize="30sp" android:textStyle="bold" />
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp"
@@ -39,13 +39,15 @@
         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="28dp"
             android:text="PERMISSIONS &amp; SHORTCUTS" android:textColor="@color/accent" android:textStyle="bold" android:textSize="12sp" />
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp"
-            android:text="Allow display-over-other-apps and microphone access. Enable Gemini Float Shortcut in Accessibility settings to use double-press Volume Down. Samsung/Android 10 can often keep an already-started Live session active when locked; secure lock-screen interaction is still controlled by Android. Screen capture and camera each require explicit system permission." android:textColor="@color/text_secondary" android:textSize="13sp" android:lineSpacingExtra="4dp" />
+            android:text="Allow display-over-other-apps and microphone access. The default-assistant shortcut opens Buddy. Accessibility is only needed for the optional Volume Down shortcut. Samsung/Android 10 can often keep an already-started Live session active when locked; secure lock-screen interaction is still controlled by Android. Screen capture and camera each require explicit system permission." android:textColor="@color/text_secondary" android:textSize="13sp" android:lineSpacingExtra="4dp" />
+        <com.google.android.material.button.MaterialButton android:id="@+id/btnSetDefaultAssistant" android:layout_width="match_parent" android:layout_height="50dp" android:layout_marginTop="14dp"
+            android:text="Set Buddy as default assistant" android:textAllCaps="false" android:textColor="@color/ink" android:backgroundTint="@color/accent" />
         <com.google.android.material.button.MaterialButton android:id="@+id/btnGrantOverlay" android:layout_width="match_parent" android:layout_height="50dp" android:layout_marginTop="14dp"
             android:text="Allow floating control bar" android:textAllCaps="false" android:textColor="@color/text_primary" android:backgroundTint="@color/panel_elevated" />
         <com.google.android.material.button.MaterialButton android:id="@+id/btnGrantAccessibility" android:layout_width="match_parent" android:layout_height="50dp" android:layout_marginTop="8dp"
             android:text="Set up Volume Down shortcut" android:textAllCaps="false" android:textColor="@color/text_primary" android:backgroundTint="@color/panel_elevated" />
         <com.google.android.material.button.MaterialButton android:id="@+id/btnVoiceKeyboardSetup" android:layout_width="match_parent" android:layout_height="50dp" android:layout_marginTop="8dp"
-            android:text="Enable Gemini Float Voice Keyboard" android:textAllCaps="false" android:textColor="@color/text_primary" android:backgroundTint="@color/panel_elevated" />
+            android:text="Enable Buddy Voice Keyboard" android:textAllCaps="false" android:textColor="@color/text_primary" android:backgroundTint="@color/panel_elevated" />
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="5dp"
             android:text="Enable the keyboard in Android settings, then select it from the keyboard switcher. It transcribes and formats speech with Gemini before inserting it in a focused text field." android:textColor="@color/text_secondary" android:textSize="12sp" />
         <com.google.android.material.button.MaterialButton android:id="@+id/btnShowOrb" android:layout_width="match_parent" android:layout_height="50dp" android:layout_marginTop="8dp"

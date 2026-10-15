@@ -38,5 +38,22 @@
             <intent-filter><action android:name="android.view.InputMethod" /></intent-filter>
             <meta-data android:name="android.view.im" android:resource="@xml/voice_keyboard_method" />
         </service>
+        <service
+            android:name=".BuddyVoiceInteractionService"
+            android:label="Buddy"
+            android:permission="android.permission.BIND_VOICE_INTERACTION"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.service.voice.VoiceInteractionService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.voice_interaction"
+                android:resource="@xml/buddy_voice_interaction" />
+        </service>
+        <service
+            android:name=".BuddyVoiceInteractionSessionService"
+            android:label="Buddy session"
+            android:permission="android.permission.BIND_VOICE_INTERACTION"
+            android:exported="true" />
     </application>
 </manifest>
