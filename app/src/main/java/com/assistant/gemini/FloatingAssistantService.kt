@@ -92,7 +92,10 @@ class FloatingAssistantService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == ACTION_SHOW) showAssistant()
+        if (intent?.action == ACTION_SHOW) {
+            if (panelView == null) showAssistant()
+            else if (panelMinimized) restorePanel()
+        }
         return START_NOT_STICKY
     }
 
