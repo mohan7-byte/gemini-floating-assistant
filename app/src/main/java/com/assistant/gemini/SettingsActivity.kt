@@ -41,9 +41,14 @@ class SettingsActivity : AppCompatActivity() {
 
         findViewById<Button>(R.id.btnSetDefaultAssistant).setOnClickListener {
             try {
-                startActivity(Intent(Settings.ACTION_VOICE_INPUT_SETTINGS))
+                // Open Android's Digital Assistant chooser, not voice typing settings.
+                startActivity(Intent("android.settings.ASSIST_SETTINGS"))
             } catch (_: Exception) {
-                startActivity(Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS))
+                try {
+                    startActivity(Intent(Settings.ACTION_VOICE_INPUT_SETTINGS))
+                } catch (_: Exception) {
+                    startActivity(Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS))
+                }
             }
         }
 

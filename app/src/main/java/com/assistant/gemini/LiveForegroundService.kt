@@ -39,7 +39,9 @@ class LiveForegroundService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
-            AssistantAccessibilityService.requestDisconnectFromNotification()
+            if (!FloatingAssistantService.requestDisconnectFromNotification()) {
+                AssistantAccessibilityService.requestDisconnectFromNotification()
+            }
             stopForegroundCompat()
             stopSelf()
             return START_NOT_STICKY

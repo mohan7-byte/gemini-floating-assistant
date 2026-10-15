@@ -100,7 +100,7 @@ class AssistantAccessibilityService : AccessibilityService() {
         val now = System.currentTimeMillis()
         if (now - lastVolumeDown in 1..DOUBLE_PRESS_MS) {
             lastVolumeDown = 0L
-            if (liveSession == null) showAssistant()
+            if (liveSession == null) FloatingAssistantService.show(this)
             return true
         }
         lastVolumeDown = now

@@ -56,6 +56,8 @@ class GeminiLiveSession(
     @Volatile private var playbackThread: Thread? = null
     @Volatile private var assistantSpeaking = false
     @Volatile private var turnCompleteSeen = false
+    // Live output transcription arrives in fragments; publish only once the model turn finishes.
+    private val assistantTranscriptBuffer = StringBuilder()
     @Volatile private var playbackBusy = false
     @Volatile private var echoCanceler: AcousticEchoCanceler? = null
     @Volatile private var noiseSuppressor: NoiseSuppressor? = null
@@ -148,7 +150,7 @@ class GeminiLiveSession(
                     val inputTranscript = server.optJSONObject("inputTranscription")?.optString("text").orEmpty()
                     if (inputTranscript.isNotBlank()) callbacks.onTranscript(if (dictationOnly) inputTranscript else "You: $inputTranscript", false, false)
                     val outputTranscript = server.optJSONObject("outputTranscription")?.optString("text").orEmpty()
-                    if (!dictationOnly && outputTranscript.isNotBlank()) callbacks.onTranscript("Buddy: $outputTranscript", true, false)
+                    if (!dictationOnly && outputTranscript.isNotBlank()) assistantTranscriptBuffer.append(outputTranscript)
                     // Dictation uses only input transcription; ignore generated response payloads.
                     val parts = if (dictationOnly) null else server.optJSONObject("modelTurn")?.optJSONArray("parts")
                     if (parts != null) for (i in 0 until parts.length()) {
@@ -172,6 +174,9 @@ class GeminiLiveSession(
                         }
                     }
                     if (server.optBoolean("turnComplete", false) && !dictationOnly) {
+                        val completeText = assistantTranscriptBuffer.toString().trim()
+                        assistantTranscriptBuffer.setLength(0)
+                        if (completeText.isNotBlank()) callbacks.onTranscript("Buddy: $completeText", true, false)
                         callbacks.onStatus("Live · Ready for you")
                         turnCompleteSeen = true
                         resumeMicrophoneAfterPlayback()
