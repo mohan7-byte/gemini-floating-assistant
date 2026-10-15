@@ -259,6 +259,8 @@ class FloatingAssistantService : Service() {
             return
         }
 
+        // Start as the small live Buddy orb. Tapping it restores the full control bar.
+        minimizePanel()
         LiveForegroundService.start(this)
         val session = GeminiLiveSession(this, apiKey, model, object : GeminiLiveSession.Callbacks {
             override fun onStatus(message: String) {
