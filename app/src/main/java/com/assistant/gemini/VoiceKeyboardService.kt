@@ -1,0 +1,530 @@
+package com.assistant.gemini
+
+import android.app.AlertDialog
+import android.content.Context
+import android.content.pm.PackageManager
+import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
+import android.inputmethodservice.InputMethodService
+import android.os.Handler
+import android.os.Looper
+import android.view.Gravity
+import android.view.MotionEvent
+import android.view.View
+import android.view.ViewConfiguration
+import android.view.ViewGroup
+import android.view.inputmethod.InputConnection
+import android.view.textservice.SentenceSuggestionsInfo
+import android.view.textservice.SuggestionsInfo
+import android.view.textservice.SpellCheckerSession
+import android.view.textservice.TextInfo
+import android.view.textservice.TextServicesManager
+import java.util.Locale
+import android.widget.EditText
+import android.widget.LinearLayout
+import android.widget.TextView
+import kotlin.math.abs
+
+/** Minimal live-dictation IME with a usable offline English/Hindi keyboard. */
+class VoiceKeyboardService : InputMethodService() {
+    private val mainHandler = Handler(Looper.getMainLooper())
+    @Volatile private var recording = false
+    @Volatile private var intentionalStop = false
+    private var statusView: TextView? = null
+    private var dictateButton: TextView? = null
+    private var keyboardContainer: LinearLayout? = null
+    private var quickKeysContainer: LinearLayout? = null
+    private var voicePanel: View? = null
+    private var offlinePanel: View? = null
+    private var languageButton: TextView? = null
+    private var inputRoot: View? = null
+    private var suggestionViews: List<TextView> = emptyList()
+    private var spellCheckerSession: SpellCheckerSession? = null
+    private val pendingSuggestionWords = mutableMapOf<Int, String>()
+    private var latestSuggestionRequest = 0
+    private var activeSuggestionWord = ""
+    private val spellCheckerListener = object : SpellCheckerSession.SpellCheckerSessionListener {
+        override fun onGetSuggestions(results: Array<out SuggestionsInfo>) {
+            val info = results.firstOrNull() ?: return
+            val sequence = info.sequence
+            val word = pendingSuggestionWords.remove(sequence) ?: return
+            if (sequence != latestSuggestionRequest) return
+            val candidates = mutableListOf<String>()
+            for (index in 0 until minOf(info.suggestionsCount, 3)) {
+                info.getSuggestionAt(index)?.takeIf { it.isNotBlank() }?.let(candidates::add)
+            }
+            if (candidates.isEmpty()) candidates.add(word)
+            mainHandler.post {
+                if (isOfflineKeyboard && activeSuggestionWord == word && !numberPage) displaySuggestions(candidates.distinct())
+            }
+        }
+        override fun onGetSentenceSuggestions(results: Array<out SentenceSuggestionsInfo>) = Unit
+    }
+    private var isOfflineKeyboard = false
+    private var offlineLanguage = "EN"
+    private var shifted = false
+    private var numberPage = false
+    @Volatile private var liveSession: GeminiLiveSession? = null
+    @Volatile private var lastTranscriptChunk = ""
+    @Volatile private var composingPrefix = ""
+    private val deleteRepeater = object : Runnable {
+        override fun run() {
+            if (!deleteHeld) return
+            deleteWord()
+            mainHandler.postDelayed(this, 85L)
+        }
+    }
+    private var deleteHeld = false
+    private var deleteDownAt = 0L
+    private var gestureStartX = 0f
+    private var gestureStartY = 0f
+    private var gestureHandled = false
+
+    override fun onCreateInputView(): View {
+        val root = layoutInflater.inflate(R.layout.ime_voice_keyboard, null)
+        inputRoot = root
+        statusView = root.findViewById(R.id.imeStatus)
+        dictateButton = root.findViewById(R.id.btnDictate)
+        voicePanel = root.findViewById(R.id.voicePanel)
+        offlinePanel = root.findViewById(R.id.offlinePanel)
+        keyboardContainer = root.findViewById(R.id.keyboardContainer)
+        quickKeysContainer = root.findViewById(R.id.quickKeysContainer)
+        languageButton = root.findViewById(R.id.btnLanguage)
+        suggestionViews = listOf(root.findViewById(R.id.suggestion1), root.findViewById(R.id.suggestion2), root.findViewById(R.id.suggestion3))
+        suggestionViews.forEach { candidate ->
+            candidate.setOnClickListener {
+                (it as? TextView)?.text?.toString()?.takeIf { text -> text.isNotBlank() }?.let(::acceptSuggestion)
+            }
+        }
+        dictateButton?.setOnClickListener { if (recording) stopDictation() else startDictation() }
+        root.findViewById<View>(R.id.btnHideKeyboard).setOnClickListener { stopDictation(); requestHideSelf(0) }
+        root.findViewById<View>(R.id.btnOfflineKeyboard).setOnClickListener { showOfflineKeyboard(!isOfflineKeyboard) }
+        root.findViewById<View>(R.id.btnBackToVoice).setOnClickListener { showOfflineKeyboard(false) }
+        languageButton?.setOnClickListener { switchLanguage() }
+        root.findViewById<View>(R.id.btnCustomizeKeys).setOnClickListener { customizeKeys() }
+        // Swipe down on the header/status area hides the IME; it never steals ordinary key taps.
+        listOf(root.findViewById<View>(R.id.imeHeader), root.findViewById<View>(R.id.imeStatus))
+            .forEach { installHideGesture(it) }
+        renderQuickKeys()
+        renderOfflineKeys()
+        showOfflineKeyboard(false)
+        return root
+    }
+
+    private fun startDictation() {
+        if (recording) return
+        val key = SecurePrefs.get(this).getString("api_key", "").orEmpty()
+        if (key.isBlank()) { showStatus("Add your API key in app settings first."); return }
+        if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            showStatus("Enable microphone permission in Android settings."); return
+        }
+        if (currentInputConnection == null) { showStatus("Tap a text field first."); return }
+        intentionalStop = false
+        recording = true
+        lastTranscriptChunk = ""
+        dictateButton?.text = "■  Stop dictation"
+        showStatus("Connecting to live transcription…")
+        val session = GeminiLiveSession(this, key, "gemini-3.5-transcribe-live",
+            object : GeminiLiveSession.Callbacks {
+                override fun onStatus(message: String) { if (recording) showStatus(message) }
+                override fun onReady() { showStatus("Listening · live text") }
+                override fun onTranscript(message: String, isAssistant: Boolean, isInterim: Boolean) {
+                    if (isAssistant || !recording || message.isBlank()) return
+                    mainHandler.post {
+                        if (!recording) return@post
+                        val ic = currentInputConnection ?: return@post
+                        val normalized = message.trim()
+                        if (normalized.isBlank()) return@post
+                        if (isInterim) {
+                            if (lastTranscriptChunk.isBlank()) composingPrefix = spacingPrefix(ic)
+                            lastTranscriptChunk = normalized
+                            ic.setComposingText(composingPrefix + normalized, 1)
+                            showStatus("Listening · $normalized")
+                        } else {
+                            ic.commitText((if (lastTranscriptChunk.isNotBlank()) composingPrefix else spacingPrefix(ic)) + normalized, 1)
+                            lastTranscriptChunk = ""
+                            composingPrefix = ""
+                            showStatus("Inserted · $normalized")
+                        }
+                    }
+                }
+                override fun onEnded(message: String) {
+                    mainHandler.post {
+                        val userStopped = intentionalStop
+                        currentInputConnection?.finishComposingText()
+                        recording = false
+                        liveSession = null
+                        lastTranscriptChunk = ""
+                        composingPrefix = ""
+                        dictateButton?.text = "●  Start live dictation"
+                        showStatus(if (userStopped) "Dictation stopped" else message)
+                    }
+                }
+            }, dictationOnly = true)
+        liveSession = session
+        session.connect()
+    }
+
+    private fun spacingPrefix(ic: InputConnection): String {
+        val before = ic.getTextBeforeCursor(1, 0)?.lastOrNull()
+        return if (before != null && !before.isWhitespace() && before !in "([{\n\r") " " else ""
+    }
+
+    private fun stopDictation() {
+        if (!recording && liveSession == null) return
+        intentionalStop = true
+        recording = false
+        currentInputConnection?.finishComposingText()
+        val session = liveSession
+        liveSession = null
+        session?.close()
+        dictateButton?.text = "●  Start live dictation"
+        showStatus("Dictation stopped · text kept")
+        lastTranscriptChunk = ""
+        composingPrefix = ""
+    }
+
+    private fun showOfflineKeyboard(show: Boolean) {
+        isOfflineKeyboard = show
+        voicePanel?.visibility = if (show) View.GONE else View.VISIBLE
+        offlinePanel?.visibility = if (show) View.VISIBLE else View.GONE
+        val toggle = inputRoot?.findViewById<TextView>(R.id.btnOfflineKeyboard)
+        toggle?.text = if (show) "🎙" else "⌨"
+        toggle?.contentDescription = if (show) "Switch to voice typing" else "Switch to offline keyboard"
+        languageButton?.text = offlineLanguage
+        if (show) {
+            stopDictation()
+            openSpellChecker()
+            showStatus("$offlineLanguage keyboard")
+            refreshSuggestions()
+        } else {
+            activeSuggestionWord = ""
+            displaySuggestions(emptyList())
+            showStatus(if (recording) "Listening · live text" else "Voice typing ready")
+        }
+    }
+
+    private fun switchLanguage() {
+        offlineLanguage = if (offlineLanguage == "EN") "HI" else "EN"
+        shifted = false
+        numberPage = false
+        languageButton?.text = offlineLanguage
+        renderOfflineKeys()
+        if (isOfflineKeyboard) {
+            openSpellChecker()
+            refreshSuggestions()
+        }
+    }
+
+    private fun renderQuickKeys() {
+        val container = quickKeysContainer ?: return
+        container.removeAllViews()
+        val custom = SecurePrefs.get(this).getString("voice_custom_keys", "").orEmpty()
+            .split(",").map { it.trim() }.filter { it.isNotEmpty() }.take(6)
+        val keys = listOf("⌫", "Space", "↵", ".", ",") + custom
+        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER; layoutParams = matchWrap() }
+        keys.forEach { key ->
+            val label = when (key) { "Space" -> "Space"; "↵" -> "Enter"; else -> key }
+            val view = keyView(label, if (key == "Space") 1.6f else 1f, primary = key == "Space" || key == "↵") {
+                when (key) {
+                    "⌫", "Backspace" -> deleteOne()
+                    "Space" -> commit(" ")
+                    "↵", "Enter" -> enterKey()
+                    else -> commit(key)
+                }
+            }
+            if (key == "⌫" || key == "Backspace") installDeleteGesture(view)
+            row.addView(view)
+        }
+        container.addView(row)
+    }
+
+    private fun renderOfflineKeys() {
+        val container = keyboardContainer ?: return
+        container.removeAllViews()
+        val rows: List<List<String>> = when {
+            numberPage -> listOf(
+                listOf("1","2","3"),
+                listOf("4","5","6"),
+                listOf("7","8","9"),
+                listOf("ABC","0","⌫","↵")
+            )
+            offlineLanguage == "EN" -> listOf(
+                listOf("q","w","e","r","t","y","u","i","o","p"),
+                listOf("a","s","d","f","g","h","j","k","l"),
+                listOf("⇧","z","x","c","v","b","n","m","⌫"),
+                listOf("?123",",","🌐","Space",".","↵")
+            )
+            !shifted -> listOf(
+                listOf("अ","आ","इ","ई","उ","ऊ","ए","ऐ","ओ","औ"),
+                listOf("क","ख","ग","घ","ङ","च","छ","ज","झ","ञ"),
+                listOf("ट","ठ","ड","ढ","ण","त","थ","द","ध","न"),
+                listOf("⇧","प","फ","ब","भ","म","य","र","ल","⌫"),
+                listOf("?123","ं","🌐","Space","्","↵")
+            )
+            else -> listOf(
+                listOf("ऋ","अं","अः","क्ष","त्र","ज्ञ","श्र","ड़","ढ़","फ़"),
+                listOf("व","श","ष","स","ह","ळ","क़","ख़","ग़","ज़"),
+                listOf("ा","ि","ी","ु","ू","ृ","े","ै","ो","ौ"),
+                listOf("⇧","ं","ः","्","ँ","ॉ","ौ","ॄ","ऽ","⌫"),
+                listOf("?123","।","🌐","Space","॰","↵")
+            )
+        }
+        rows.forEachIndexed { rowIndex, rowKeys ->
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER
+                layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    dp(if (numberPage) 43 else if (offlineLanguage == "HI") 37 else 39)
+                ).apply {
+                    bottomMargin = dp(3)
+                    val sideInset = when {
+                        numberPage -> dp(28)
+                        rowIndex == 1 && offlineLanguage == "EN" -> dp(9)
+                        rowIndex == 2 && offlineLanguage == "EN" -> dp(2)
+                        else -> 0
+                    }
+                    marginStart = sideInset
+                    marginEnd = sideInset
+                }
+            }
+            rowKeys.forEach { key ->
+                val weight = when (key) {
+                    "Space" -> 2.15f
+                    "?123","ABC","🌐","↵","⇧","⌫" -> 1.3f
+                    else -> 1f
+                }
+                val label = when {
+                    key == "Space" -> "space"
+                    key == "🌐" -> "🌐"
+                    key == "⇧" && shifted && offlineLanguage == "EN" -> "⬆"
+                    key == "⇧" -> "⇧"
+                    key.length == 1 && offlineLanguage == "EN" && shifted && key[0].isLetter() -> key.uppercase()
+                    else -> key
+                }
+                val button = keyView(label, weight, primary = key == "Space" || key == "↵" || (key == "⇧" && shifted)) {
+                    when (key) {
+                        "⌫" -> deleteOne()
+                        "Space" -> commit(" ")
+                        "↵" -> enterKey()
+                        "🌐" -> switchLanguage()
+                        "⇧" -> { shifted = !shifted; renderOfflineKeys() }
+                        "?123" -> { numberPage = true; renderOfflineKeys() }
+                        "ABC" -> { numberPage = false; shifted = false; renderOfflineKeys() }
+                        else -> {
+                            val output = if (offlineLanguage == "EN" && shifted && key.length == 1 && key[0].isLetter()) key.uppercase() else key
+                            commit(output)
+                            if (offlineLanguage == "EN" && shifted) { shifted = false; renderOfflineKeys() }
+                        }
+                    }
+                }
+                if (key == "⌫") installDeleteGesture(button) else installHideGesture(button)
+                row.addView(button)
+            }
+            container.addView(row)
+        }
+        // Keep the numeric page truly numeric: hide the word suggestion strip.
+        inputRoot?.findViewById<View>(R.id.suggestionContainer)?.visibility =
+            if (numberPage) View.GONE else View.VISIBLE
+    }
+
+    private fun openSpellChecker() {
+        runCatching {
+            spellCheckerSession?.close()
+            val manager = getSystemService(Context.TEXT_SERVICES_MANAGER_SERVICE) as? TextServicesManager
+            val locale = if (offlineLanguage == "HI") Locale("hi", "IN") else Locale.US
+            spellCheckerSession = manager?.newSpellCheckerSession(null, locale, spellCheckerListener, true)
+        }.onFailure { spellCheckerSession = null }
+    }
+
+    private fun currentWord(): String {
+        val before = currentInputConnection?.getTextBeforeCursor(96, 0)?.toString().orEmpty()
+        return before.takeLastWhile { it.isLetterOrDigit() || it.code in 0x0900..0x097F }
+    }
+
+    private fun refreshSuggestions() {
+        if (!isOfflineKeyboard || numberPage) {
+            displaySuggestions(emptyList())
+            return
+        }
+        val word = currentWord()
+        activeSuggestionWord = word
+        latestSuggestionRequest += 1
+        pendingSuggestionWords.clear()
+        if (word.isBlank() || word.length < 2) {
+            displaySuggestions(if (word.isBlank()) emptyList() else listOf(word))
+            return
+        }
+        displaySuggestions(listOf(word))
+        val checker = spellCheckerSession ?: return
+        val sequence = latestSuggestionRequest
+        pendingSuggestionWords[sequence] = word
+        runCatching { checker.getSuggestions(arrayOf(TextInfo(word, 0, sequence)), 3, false) }
+            .onFailure { pendingSuggestionWords.remove(sequence) }
+    }
+
+    private fun displaySuggestions(words: List<String>) {
+        suggestionViews.forEachIndexed { index, candidate ->
+            val suggestion = words.getOrNull(index).orEmpty()
+            candidate.text = suggestion
+            candidate.alpha = if (suggestion.isBlank()) 0.35f else 1f
+            candidate.isEnabled = suggestion.isNotBlank()
+            candidate.contentDescription = if (suggestion.isBlank()) "No suggestion" else "Use suggestion $suggestion"
+        }
+    }
+
+    private fun acceptSuggestion(suggestion: String) {
+        val ic = currentInputConnection ?: return
+        val word = currentWord()
+        if (word.isBlank()) return
+        ic.deleteSurroundingText(word.length, 0)
+        ic.commitText("$suggestion ", 1)
+        refreshSuggestions()
+    }
+
+    private fun installHideGesture(view: View) {
+        view.setOnTouchListener { v, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    gestureStartX = event.rawX; gestureStartY = event.rawY; gestureHandled = false; false
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    if (!gestureHandled && event.rawY - gestureStartY > dp(70) &&
+                        abs(event.rawY - gestureStartY) > abs(event.rawX - gestureStartX)) {
+                        gestureHandled = true; stopDictation(); requestHideSelf(0); true
+                    } else false
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> { gestureHandled = false; false }
+                else -> false
+            }
+        }
+    }
+
+    private fun installDeleteGesture(view: View) {
+        view.setOnTouchListener { _, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    deleteHeld = false
+                    gestureStartX = event.rawX; gestureStartY = event.rawY
+                    deleteDownAt = android.os.SystemClock.uptimeMillis()
+                    mainHandler.postDelayed({
+                        if (deleteDownAt != 0L) { deleteHeld = true; deleteWord(); mainHandler.postDelayed(deleteRepeater, 140L) }
+                    }, ViewConfiguration.getLongPressTimeout().toLong())
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    if (deleteDownAt != 0L && (abs(event.rawX - gestureStartX) > dp(36) || abs(event.rawY - gestureStartY) > dp(36))) {
+                        if (!deleteHeld) { mainHandler.removeCallbacks(deleteRepeater); deleteHeld = true }
+                        deleteWord()
+                        true
+                    } else true
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    val wasLong = deleteHeld
+                    deleteDownAt = 0L; deleteHeld = false; mainHandler.removeCallbacks(deleteRepeater)
+                    if (!wasLong && event.actionMasked == MotionEvent.ACTION_UP) deleteOne()
+                    true
+                }
+                else -> true
+            }
+        }
+    }
+
+    private fun customizeKeys() {
+        val input = EditText(this).apply {
+            setText(SecurePrefs.get(this@VoiceKeyboardService).getString("voice_custom_keys", "").orEmpty())
+            hint = "e.g. @, #, ₹, 👍"
+            setTextColor(Color.WHITE); setHintTextColor(0xFF9CA3AF.toInt())
+            setPadding(dp(16), dp(10), dp(16), dp(10))
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Quick keys")
+            .setMessage("Up to 6 shortcuts, separated by commas.")
+            .setView(input).setNegativeButton("Cancel", null)
+            .setPositiveButton("Save") { _, _ ->
+                val keys = input.text.toString().split(",").map { it.trim() }.filter { it.isNotEmpty() }.take(6)
+                SecurePrefs.get(this).edit().putString("voice_custom_keys", keys.joinToString(",")).apply()
+                renderQuickKeys()
+            }.show()
+    }
+
+    private fun keyView(label: String, weight: Float = 1f, primary: Boolean = false, action: () -> Unit): TextView =
+        TextView(this).apply {
+            text = label
+            gravity = Gravity.CENTER
+            textSize = when { label.length > 5 -> 11f; label.length > 2 -> 13f; else -> 17f }
+            setTextColor(if (primary) 0xFF202B34.toInt() else Color.WHITE)
+            background = GradientDrawable().apply {
+                setColor(if (primary) 0xFFBDEDDD.toInt() else 0xFF303641.toInt())
+                cornerRadius = dp(6).toFloat()
+                setStroke(dp(1), if (primary) 0xFFBDEDDD.toInt() else 0xFF454D58.toInt())
+            }
+            elevation = dp(1).toFloat()
+            isClickable = true; isFocusable = true
+            setOnClickListener { action() }
+            val keyHeight = when {
+                !isOfflineKeyboard -> 36
+                numberPage -> 40
+                offlineLanguage == "HI" -> 34
+                else -> 36
+            }
+            layoutParams = LinearLayout.LayoutParams(0, dp(keyHeight), weight).apply { marginStart = dp(2); marginEnd = dp(2) }
+        }
+
+    private fun commit(text: String) {
+        currentInputConnection?.commitText(text, 1)
+        refreshSuggestions()
+    }
+    private fun deleteOne() {
+        val ic = currentInputConnection ?: return
+        val selected = ic.getSelectedText(0)
+        if (!selected.isNullOrEmpty()) ic.commitText("", 1)
+        else {
+            val before = ic.getTextBeforeCursor(2, 0)
+            if (!before.isNullOrEmpty() && before.length >= 2 && Character.isLowSurrogate(before.last()) && Character.isHighSurrogate(before[before.length - 2])) ic.deleteSurroundingText(2, 0)
+            else ic.deleteSurroundingText(1, 0)
+        }
+        refreshSuggestions()
+    }
+    private fun deleteWord() {
+        val ic = currentInputConnection ?: return
+        val before = ic.getTextBeforeCursor(80, 0)?.toString().orEmpty()
+        if (before.isEmpty()) { deleteOne(); return }
+        val trimmed = before.dropLastWhile { it.isWhitespace() }
+        val word = trimmed.takeLastWhile { !it.isWhitespace() }
+        val count = (word.length + (before.length - trimmed.length)).coerceAtLeast(1)
+        ic.deleteSurroundingText(count, 0)
+        refreshSuggestions()
+    }
+    private fun enterKey() {
+        if (!sendDefaultEditorAction(true)) sendDownUpKeyEvents(android.view.KeyEvent.KEYCODE_ENTER)
+    }
+    private fun installDummy() = Unit
+    private fun matchWrap() = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+    private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
+    private fun showStatus(message: String) { mainHandler.post { statusView?.text = message } }
+
+    override fun onStartInputView(info: android.view.inputmethod.EditorInfo?, restarting: Boolean) {
+        super.onStartInputView(info, restarting)
+        if (isOfflineKeyboard) {
+            openSpellChecker()
+            refreshSuggestions()
+        }
+    }
+
+    override fun onFinishInputView(finishingInput: Boolean) {
+        stopDictation()
+        super.onFinishInputView(finishingInput)
+    }
+
+    override fun onDestroy() {
+        deleteDownAt = 0L
+        deleteHeld = false
+        mainHandler.removeCallbacks(deleteRepeater)
+        stopDictation()
+        spellCheckerSession?.close()
+        spellCheckerSession = null
+        super.onDestroy()
+    }
+}
