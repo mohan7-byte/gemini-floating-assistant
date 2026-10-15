@@ -30,6 +30,7 @@ class VoiceKeyboardService : InputMethodService() {
     private var voicePanel: View? = null
     private var offlinePanel: View? = null
     private var languageButton: TextView? = null
+    private var inputRoot: View? = null
     private var isOfflineKeyboard = false
     private var offlineLanguage = "EN"
     private var shifted = false
@@ -52,6 +53,7 @@ class VoiceKeyboardService : InputMethodService() {
 
     override fun onCreateInputView(): View {
         val root = layoutInflater.inflate(R.layout.ime_voice_keyboard, null)
+        inputRoot = root
         statusView = root.findViewById(R.id.imeStatus)
         dictateButton = root.findViewById(R.id.btnDictate)
         voicePanel = root.findViewById(R.id.voicePanel)
@@ -156,9 +158,15 @@ class VoiceKeyboardService : InputMethodService() {
         isOfflineKeyboard = show
         voicePanel?.visibility = if (show) View.GONE else View.VISIBLE
         offlinePanel?.visibility = if (show) View.VISIBLE else View.GONE
+        val toggle = inputRoot?.findViewById<TextView>(R.id.btnOfflineKeyboard)
+        toggle?.text = if (show) "🎙" else "⌨"
+        toggle?.contentDescription = if (show) "Switch to voice typing" else "Switch to offline keyboard"
+        languageButton?.text = offlineLanguage
         if (show) {
             stopDictation()
-            showStatus("Offline keyboard · no internet required")
+            showStatus("$offlineLanguage keyboard")
+        } else {
+            showStatus(if (recording) "Listening · live text" else "Voice typing ready")
         }
     }
 
