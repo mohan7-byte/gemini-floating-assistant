@@ -111,12 +111,13 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun openLiveAssistant() {
-        if (AssistantAccessibilityService.requestShow()) {
-            finish()
-        } else {
-            Toast.makeText(this, "Enable Buddy Shortcut in Accessibility settings first, then return and tap Open Live assistant.", Toast.LENGTH_LONG).show()
-            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+            startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
+            Toast.makeText(this, "Allow display over other apps, then tap Open Live assistant again.", Toast.LENGTH_LONG).show()
+            return
         }
+        FloatingAssistantService.show(this)
+        finish()
     }
 
     @Deprecated("Permission callback retained for API 26 compatibility")

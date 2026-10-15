@@ -31,6 +31,7 @@
             <intent-filter><action android:name="android.accessibilityservice.AccessibilityService" /></intent-filter>
             <meta-data android:name="android.accessibilityservice" android:resource="@xml/accessibility_service_config" />
         </service>
+        <service android:name=".FloatingAssistantService" android:exported="false" />
         <service android:name=".ScreenCaptureService" android:exported="false" android:foregroundServiceType="mediaProjection" />
         <service android:name=".LiveForegroundService" android:exported="false" android:foregroundServiceType="microphone" />
         <service android:name=".CameraForegroundService" android:exported="false" android:foregroundServiceType="camera" />

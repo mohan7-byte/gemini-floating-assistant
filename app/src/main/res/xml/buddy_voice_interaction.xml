@@ -2,5 +2,4 @@
 <voice-interaction-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:sessionService="com.assistant.gemini.BuddyVoiceInteractionSessionService"
     android:supportsAssist="true"
-    android:supportsLaunchFromKeyguard="false"
     android:settingsActivity="com.assistant.gemini.SettingsActivity" />
