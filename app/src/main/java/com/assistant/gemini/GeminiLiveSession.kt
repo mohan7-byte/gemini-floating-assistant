@@ -242,6 +242,13 @@ class GeminiLiveSession(
         }
     }
 
+    /** Ends the current microphone stream so input transcription can be finalized. */
+    fun finishInput() {
+        if (closed || !ready) return
+        socket?.send(JSONObject().put("realtimeInput", JSONObject().put("audioStreamEnd", true)).toString())
+        stopMicrophone()
+    }
+
     fun sendText(text: String) {
         val clean = text.trim()
         if (clean.isBlank() || closed || !ready) {

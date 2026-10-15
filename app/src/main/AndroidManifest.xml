@@ -40,6 +40,19 @@
             <meta-data android:name="android.view.im" android:resource="@xml/voice_keyboard_method" />
         </service>
         <service
+            android:name=".BuddyRecognitionService"
+            android:label="Buddy speech recognition"
+            android:permission="android.permission.BIND_SPEECH_RECOGNITION_SERVICE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.speech.RecognitionService" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <meta-data
+                android:name="android.speech"
+                android:resource="@xml/buddy_recognition_service" />
+        </service>
+        <service
             android:name=".BuddyVoiceInteractionService"
             android:label="Buddy"
             android:permission="android.permission.BIND_VOICE_INTERACTION"

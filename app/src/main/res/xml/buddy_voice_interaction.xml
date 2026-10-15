@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <voice-interaction-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:sessionService="com.assistant.gemini.BuddyVoiceInteractionSessionService"
+    android:recognitionService="com.assistant.gemini.BuddyRecognitionService"
     android:supportsAssist="true"
     android:supportsLaunchVoiceAssistFromKeyguard="false"
     android:settingsActivity="com.assistant.gemini.SettingsActivity" />
