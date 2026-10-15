@@ -18,9 +18,24 @@ import android.widget.TextView
 /** Routes the Android default-assistant gesture into Buddy's existing floating orb. */
 class BuddyVoiceInteractionSession(context: Context) : VoiceInteractionSession(context) {
     private val main = android.os.Handler(android.os.Looper.getMainLooper())
+    private var launchChecks = 0
+    private val verifyFloatingPanel = object : Runnable {
+        override fun run() {
+            if (FloatingAssistantService.hasFloatingPanel()) {
+                hide()
+                return
+            }
+            if (launchChecks++ < 10) {
+                main.postDelayed(this, 150L)
+            } else {
+                setContentView(buildFallback("Buddy couldn't display its floating orb. Check Display over other apps and microphone permission, then try again."))
+            }
+        }
+    }
 
     override fun onShow(args: Bundle?, showFlags: Int) {
         super.onShow(args, showFlags)
+        main.removeCallbacks(verifyFloatingPanel)
         main.post {
             val prefs = SecurePrefs.get(context)
             val apiKey = prefs.getString("api_key", "").orEmpty()
@@ -36,12 +51,14 @@ class BuddyVoiceInteractionSession(context: Context) : VoiceInteractionSession(c
                 setContentView(buildFallback(message))
                 return@post
             }
-            if (FloatingAssistantService.show(context)) {
-                // The same service creates the live orb used by the app's own launch button.
-                hide()
-            } else {
+            if (!FloatingAssistantService.show(context)) {
                 setContentView(buildFallback("Buddy couldn't start the floating control. Open Buddy settings and try again."))
+                return@post
             }
+            // A started Service is not proof that WindowManager actually attached the orb.
+            // Keep the system assistant visible until the real floating panel exists.
+            launchChecks = 0
+            main.postDelayed(verifyFloatingPanel, 150L)
         }
     }
 
@@ -94,6 +111,7 @@ class BuddyVoiceInteractionSession(context: Context) : VoiceInteractionSession(c
     private fun dp(value: Int): Int = (value * context.resources.displayMetrics.density).toInt()
 
     override fun onHide() {
+        main.removeCallbacks(verifyFloatingPanel)
         super.onHide()
     }
 }

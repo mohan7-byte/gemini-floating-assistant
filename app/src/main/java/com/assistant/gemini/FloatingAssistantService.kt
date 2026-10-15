@@ -64,6 +64,8 @@ class FloatingAssistantService : Service() {
             }
         }
 
+        fun hasFloatingPanel(): Boolean = activeInstance?.panelView?.isAttachedToWindow == true
+
         fun requestShow(): Boolean {
             val service = activeInstance ?: return false
             service.mainHandler.post { service.showAssistant() }
