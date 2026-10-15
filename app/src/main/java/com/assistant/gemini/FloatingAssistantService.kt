@@ -55,8 +55,13 @@ class FloatingAssistantService : Service() {
         const val ACTION_SHOW = "com.assistant.gemini.FLOATING_SHOW"
         @Volatile private var activeInstance: FloatingAssistantService? = null
 
-        fun show(context: Context) {
-            runCatching { context.startService(Intent(context, FloatingAssistantService::class.java).setAction(ACTION_SHOW)) }
+        fun show(context: Context): Boolean {
+            return try {
+                val appContext = context.applicationContext
+                appContext.startService(Intent(appContext, FloatingAssistantService::class.java).setAction(ACTION_SHOW)) != null
+            } catch (_: Exception) {
+                false
+            }
         }
 
         fun requestShow(): Boolean {
