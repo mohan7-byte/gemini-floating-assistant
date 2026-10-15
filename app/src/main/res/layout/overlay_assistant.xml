@@ -27,7 +27,8 @@
                 android:layout_width="24dp"
                 android:layout_height="24dp"
                 android:layout_gravity="center"
-                android:contentDescription="Gemini audio activity"
+                android:id="@+id/waveformIcon"
+                android:contentDescription="Buddy live audio visualizer"
                 android:src="@drawable/ic_waveform" />
             <View
                 android:id="@+id/liveStatusDot"
@@ -48,7 +49,7 @@
                 android:id="@+id/tvLiveTitle"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Gemini Live"
+                android:text="Buddy"
                 android:textColor="@color/text_primary"
                 android:textSize="17sp"
                 android:fontFamily="sans"
@@ -140,7 +141,7 @@
                     android:layout_height="38dp"
                     android:layout_marginStart="5dp"
                     android:background="@drawable/action_chip"
-                    android:contentDescription="Disconnect Gemini Live"
+                    android:contentDescription="Disconnect Buddy"
                     android:padding="10dp"
                     android:src="@drawable/ic_close" />
                 <ImageView
@@ -185,12 +186,13 @@
         android:layout_height="54dp"
         android:layout_gravity="end"
         android:background="@drawable/floating_orb"
-        android:contentDescription="Restore Gemini Live floating bar"
+        android:contentDescription="Restore Buddy floating bar"
         android:visibility="gone">
         <ImageView
             android:layout_width="26dp"
             android:layout_height="26dp"
             android:layout_gravity="center"
+            android:id="@+id/bubbleWaveformIcon"
             android:src="@drawable/ic_waveform" />
     </FrameLayout>
 
@@ -230,9 +232,9 @@
                 android:layout_height="36dp"
                 android:layout_marginTop="4dp"
                 android:background="@drawable/action_chip"
-                android:contentDescription="Send camera frame to Gemini"
+                android:contentDescription="Send camera frame to Buddy"
                 android:gravity="center"
-                android:text="Ask Gemini"
+                android:text="Ask Buddy"
                 android:textColor="@color/accent"
                 android:textSize="11sp"
                 android:textStyle="bold" />
@@ -258,7 +260,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="5dp"
-            android:text="Connecting to Gemini Live…"
+            android:text="Connecting to Buddy…"
             android:textColor="@color/text_secondary"
             android:textSize="11sp" />
         <ScrollView
@@ -277,10 +279,23 @@
                 android:textColor="@color/text_primary"
                 android:textSize="13sp" />
         </ScrollView>
+        <TextView
+            android:id="@+id/btnCopyResponse"
+            android:layout_width="wrap_content"
+            android:layout_height="26dp"
+            android:layout_gravity="end"
+            android:layout_marginTop="2dp"
+            android:paddingHorizontal="8dp"
+            android:background="@drawable/action_chip"
+            android:contentDescription="Copy response"
+            android:gravity="center"
+            android:text="⧉ Copy"
+            android:textColor="@color/text_secondary"
+            android:textSize="10sp" />
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
+            android:layout_marginTop="6dp"
             android:gravity="center_vertical"
             android:orientation="horizontal">
             <EditText
@@ -289,7 +304,7 @@
                 android:layout_height="48dp"
                 android:layout_weight="1"
                 android:background="@drawable/input_background"
-                android:hint="Type to Gemini Live…"
+                android:hint="Message Buddy…"
                 android:imeOptions="actionSend"
                 android:inputType="textCapSentences|textMultiLine"
                 android:maxLines="3"
@@ -303,7 +318,7 @@
                 android:layout_height="44dp"
                 android:layout_marginStart="5dp"
                 android:background="@drawable/floating_orb"
-                android:contentDescription="Send text to Gemini Live"
+                android:contentDescription="Send message to Buddy"
                 android:gravity="center"
                 android:text="↑"
                 android:textColor="@color/accent"

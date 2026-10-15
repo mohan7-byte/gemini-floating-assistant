@@ -11,7 +11,7 @@
         </FrameLayout>
         <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_marginStart="9dp"
             android:layout_weight="1" android:orientation="vertical">
-            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Gemini Float"
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Buddy"
                 android:textColor="@color/text_primary" android:textSize="15sp" android:textStyle="bold" />
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="1dp"
                 android:text="VOICE  ·  OFFLINE KEYS" android:textColor="@color/accent" android:textSize="10sp" android:letterSpacing="0.06" />

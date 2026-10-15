@@ -47,7 +47,7 @@ class SettingsActivity : AppCompatActivity() {
 
         findViewById<Button>(R.id.btnGrantAccessibility).setOnClickListener {
             startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-            Toast.makeText(this, "Enable Gemini Float Shortcut to use double-press Volume Down", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Enable Buddy Shortcut to use double-press Volume Down", Toast.LENGTH_LONG).show()
         }
 
         findViewById<Button>(R.id.btnVoiceKeyboardSetup).setOnClickListener {
@@ -66,7 +66,7 @@ class SettingsActivity : AppCompatActivity() {
             if (saveSettings(apiKey, model) == null) return@setOnClickListener
             if (apiKey.text.toString().isBlank()) {
                 apiKey.error = "Paste your Google AI Studio API key first"
-                Toast.makeText(this, "An API key is required for Gemini Live", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, "An API key is required for Buddy Live", Toast.LENGTH_LONG).show()
                 return@setOnClickListener
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
@@ -86,7 +86,7 @@ class SettingsActivity : AppCompatActivity() {
     private fun saveSettings(apiKey: EditText, model: EditText): String? {
         val modelId = model.text.toString().trim().removePrefix("models/")
         if (modelId.isBlank()) {
-            model.error = "Enter a Gemini Live model ID"
+            model.error = "Enter a Buddy Live model ID"
             return null
         }
         SecurePrefs.get(this).edit()
@@ -98,7 +98,7 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun openVoiceKeyboardSettings() {
-        Toast.makeText(this, "Enable Gemini Float Voice Keyboard, then choose it from your keyboard switcher.", Toast.LENGTH_LONG).show()
+        Toast.makeText(this, "Enable Buddy Voice Keyboard, then choose it from your keyboard switcher.", Toast.LENGTH_LONG).show()
         startActivity(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS))
     }
 
@@ -106,7 +106,7 @@ class SettingsActivity : AppCompatActivity() {
         if (AssistantAccessibilityService.requestShow()) {
             finish()
         } else {
-            Toast.makeText(this, "Enable Gemini Float Shortcut in Accessibility settings first, then return and tap Open Live assistant.", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Enable Buddy Shortcut in Accessibility settings first, then return and tap Open Live assistant.", Toast.LENGTH_LONG).show()
             startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
         }
     }
@@ -117,7 +117,7 @@ class SettingsActivity : AppCompatActivity() {
         val granted = grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED
         when (requestCode) {
             REQUEST_MICROPHONE -> if (granted) openLiveAssistant()
-                else Toast.makeText(this, "Microphone permission is needed for Gemini Live voice.", Toast.LENGTH_LONG).show()
+                else Toast.makeText(this, "Microphone permission is needed for Buddy Live voice.", Toast.LENGTH_LONG).show()
             REQUEST_VOICE_KEYBOARD_MICROPHONE -> if (granted) openVoiceKeyboardSettings()
                 else Toast.makeText(this, "Microphone permission is needed for voice typing.", Toast.LENGTH_LONG).show()
         }

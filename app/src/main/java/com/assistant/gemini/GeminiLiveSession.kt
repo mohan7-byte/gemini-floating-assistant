@@ -148,7 +148,7 @@ class GeminiLiveSession(
                     val inputTranscript = server.optJSONObject("inputTranscription")?.optString("text").orEmpty()
                     if (inputTranscript.isNotBlank()) callbacks.onTranscript(if (dictationOnly) inputTranscript else "You: $inputTranscript", false, false)
                     val outputTranscript = server.optJSONObject("outputTranscription")?.optString("text").orEmpty()
-                    if (!dictationOnly && outputTranscript.isNotBlank()) callbacks.onTranscript("Gemini: $outputTranscript", true, false)
+                    if (!dictationOnly && outputTranscript.isNotBlank()) callbacks.onTranscript("Buddy: $outputTranscript", true, false)
                     // Dictation uses only input transcription; ignore generated response payloads.
                     val parts = if (dictationOnly) null else server.optJSONObject("modelTurn")?.optJSONArray("parts")
                     if (parts != null) for (i in 0 until parts.length()) {

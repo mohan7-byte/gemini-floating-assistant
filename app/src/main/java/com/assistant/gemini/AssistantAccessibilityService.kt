@@ -487,17 +487,18 @@ class AssistantAccessibilityService : AccessibilityService() {
 
     private fun status(message: String) {
         mainHandler.post {
-            panelView?.findViewById<TextView>(R.id.tvStatus)?.text = message
+            val buddyMessage = message.replace(Regex("(?i)gemini(?:[ -][a-z0-9.-]+)?"), "Buddy")
+            panelView?.findViewById<TextView>(R.id.tvStatus)?.text = buddyMessage
             panelView?.findViewById<TextView>(R.id.tvModelBadge)?.text = when {
-                message.contains("Listening", ignoreCase = true) -> "Connected · Listening"
-                message.contains("Ready", ignoreCase = true) -> "Connected · Ready"
-                message.contains("muted", ignoreCase = true) -> "Connected · Microphone muted"
-                message.contains("error", ignoreCase = true) || message.contains("failed", ignoreCase = true) -> "Connection needs attention"
-                message.contains("Connecting", ignoreCase = true) || message.contains("acknowledgement", ignoreCase = true) -> "Connecting securely…"
-                else -> message.take(48)
+                buddyMessage.contains("Listening", ignoreCase = true) -> "Connected · Listening"
+                buddyMessage.contains("Ready", ignoreCase = true) -> "Connected · Ready"
+                buddyMessage.contains("muted", ignoreCase = true) -> "Connected · Microphone muted"
+                buddyMessage.contains("error", ignoreCase = true) || buddyMessage.contains("failed", ignoreCase = true) -> "Connection needs attention"
+                buddyMessage.contains("Connecting", ignoreCase = true) || buddyMessage.contains("acknowledgement", ignoreCase = true) -> "Connecting securely…"
+                else -> buddyMessage.take(48)
             }
             panelView?.findViewById<TextView>(R.id.tvCameraStatus)?.let { cameraStatus ->
-                if (message.startsWith("Camera")) cameraStatus.text = message
+                if (buddyMessage.startsWith("Camera")) cameraStatus.text = buddyMessage
             }
         }
     }
