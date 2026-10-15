@@ -11,7 +11,7 @@ class CameraPermissionActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (Build.VERSION.SDK_INT < 23 || checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
-            if (!FloatingAssistantService.requestCameraPreview()) if (!FloatingAssistantService.requestCameraPreview()) AssistantAccessibilityService.requestCameraPreview()
+            if (!FloatingAssistantService.requestCameraPreview()) AssistantAccessibilityService.requestCameraPreview()
             finish()
         } else {
             requestPermissions(arrayOf(Manifest.permission.CAMERA), 8810)
