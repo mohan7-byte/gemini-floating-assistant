@@ -324,6 +324,9 @@ class VoiceKeyboardService : InputMethodService() {
             }
             container.addView(row)
         }
+        // Keep the numeric page truly numeric: hide the word suggestion strip.
+        inputRoot?.findViewById<View>(R.id.suggestionContainer)?.visibility =
+            if (numberPage) View.GONE else View.VISIBLE
     }
 
     private fun openSpellChecker() {
@@ -460,7 +463,13 @@ class VoiceKeyboardService : InputMethodService() {
             elevation = dp(1).toFloat()
             isClickable = true; isFocusable = true
             setOnClickListener { action() }
-            layoutParams = LinearLayout.LayoutParams(0, dp(40), weight).apply { marginStart = dp(2); marginEnd = dp(2) }
+            val keyHeight = when {
+                !isOfflineKeyboard -> 36
+                numberPage -> 40
+                offlineLanguage == "HI" -> 34
+                else -> 36
+            }
+            layoutParams = LinearLayout.LayoutParams(0, dp(keyHeight), weight).apply { marginStart = dp(2); marginEnd = dp(2) }
         }
 
     private fun commit(text: String) {
