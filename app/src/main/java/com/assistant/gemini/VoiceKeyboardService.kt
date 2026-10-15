@@ -190,9 +190,10 @@ class VoiceKeyboardService : InputMethodService() {
         container.removeAllViews()
         val rows: List<List<String>> = when {
             numberPage -> listOf(
-                "1234567890".map { it.toString() },
-                listOf("@","#","₹","%","&","-","+","(",")","/"),
-                listOf("ABC",",","?","!","Space",".","⌫","↵")
+                listOf("1","2","3"),
+                listOf("4","5","6"),
+                listOf("7","8","9"),
+                listOf("ABC","0","⌫","↵")
             )
             offlineLanguage == "EN" -> listOf(
                 listOf("q","w","e","r","t","y","u","i","o","p"),
@@ -200,44 +201,69 @@ class VoiceKeyboardService : InputMethodService() {
                 listOf("⇧","z","x","c","v","b","n","m","⌫"),
                 listOf("?123",",","🌐","Space",".","↵")
             )
+            !shifted -> listOf(
+                listOf("अ","आ","इ","ई","उ","ऊ","ए","ऐ","ओ","औ"),
+                listOf("क","ख","ग","घ","ङ","च","छ","ज","झ","ञ"),
+                listOf("ट","ठ","ड","ढ","ण","त","थ","द","ध","न"),
+                listOf("⇧","प","फ","ब","भ","म","य","र","ल","⌫"),
+                listOf("?123","ं","🌐","Space","्","↵")
+            )
             else -> listOf(
-                listOf("अ","आ","इ","ई","उ","ऊ","ऋ","ए","ऐ","ओ"),
-                listOf("औ","अं","अः","क","ख","ग","घ","ङ","च","छ"),
-                listOf("ज","झ","ञ","ट","ठ","ड","ढ","ण","त","थ"),
-                listOf("द","ध","न","प","फ","ब","भ","म","य","र"),
-                listOf("ल","व","श","ष","स","ह","क्ष","त्र","ज्ञ","⌫"),
+                listOf("ऋ","अं","अः","क्ष","त्र","ज्ञ","श्र","ड़","ढ़","फ़"),
+                listOf("व","श","ष","स","ह","ळ","क़","ख़","ग़","ज़"),
                 listOf("ा","ि","ी","ु","ू","ृ","े","ै","ो","ौ"),
-                listOf("ं","ः","्","ँ","।","?123","🌐","Space","↵")
+                listOf("⇧","ं","ः","्","ँ","ॉ","ौ","ॄ","ऽ","⌫"),
+                listOf("?123","।","🌐","Space","॰","↵")
             )
         }
         rows.forEachIndexed { rowIndex, rowKeys ->
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER
-                layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(if (offlineLanguage == "HI" && !numberPage) 41 else 44)).apply {
-                    bottomMargin = dp(4)
+                layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    dp(if (numberPage) 43 else if (offlineLanguage == "HI") 37 else 39)
+                ).apply {
+                    bottomMargin = dp(3)
+                    val sideInset = when {
+                        numberPage -> dp(28)
+                        rowIndex == 1 && offlineLanguage == "EN" -> dp(9)
+                        rowIndex == 2 && offlineLanguage == "EN" -> dp(2)
+                        else -> 0
+                    }
+                    marginStart = sideInset
+                    marginEnd = sideInset
                 }
             }
             rowKeys.forEach { key ->
-                val special = key in listOf("Space","?123","🌐","↵","⇧","⌫","ABC")
-                val weight = when (key) { "Space" -> 2.0f; "?123","ABC","🌐","↵","⇧","⌫" -> 1.35f; else -> 1f }
+                val weight = when (key) {
+                    "Space" -> 2.15f
+                    "?123","ABC","🌐","↵","⇧","⌫" -> 1.3f
+                    else -> 1f
+                }
                 val label = when {
                     key == "Space" -> "space"
-                    key == "🌐" -> "EN/हि"
-                    key == "⇧" && shifted -> "⬆"
+                    key == "🌐" -> "🌐"
+                    key == "⇧" && shifted && offlineLanguage == "EN" -> "⬆"
                     key == "⇧" -> "⇧"
                     key.length == 1 && offlineLanguage == "EN" && shifted && key[0].isLetter() -> key.uppercase()
                     else -> key
                 }
-                val view = keyView(label, weight, primary = key == "Space" || key == "↵") {
+                val button = keyView(label, weight, primary = key == "Space" || key == "↵" || (key == "⇧" && shifted)) {
                     when (key) {
                         "⌫" -> deleteOne()
                         "Space" -> commit(" ")
                         "↵" -> enterKey()
-                        "🌐" -> { offlineLanguage = if (offlineLanguage == "EN") "HI" else "EN"; numberPage = false; languageButton?.text = offlineLanguage; renderOfflineKeys() }
+                        "🌐" -> {
+                            offlineLanguage = if (offlineLanguage == "EN") "HI" else "EN"
+                            numberPage = false
+                            shifted = false
+                            languageButton?.text = offlineLanguage
+                            renderOfflineKeys()
+                        }
                         "⇧" -> { shifted = !shifted; renderOfflineKeys() }
                         "?123" -> { numberPage = true; renderOfflineKeys() }
-                        "ABC" -> { numberPage = false; renderOfflineKeys() }
+                        "ABC" -> { numberPage = false; shifted = false; renderOfflineKeys() }
                         else -> {
                             val output = if (offlineLanguage == "EN" && shifted && key.length == 1 && key[0].isLetter()) key.uppercase() else key
                             commit(output)
@@ -245,9 +271,8 @@ class VoiceKeyboardService : InputMethodService() {
                         }
                     }
                 }
-                if (key == "⌫") installDeleteGesture(view)
-                else installHideGesture(view)
-                row.addView(view)
+                if (key == "⌫") installDeleteGesture(button) else installHideGesture(button)
+                row.addView(button)
             }
             container.addView(row)
         }
@@ -324,12 +349,13 @@ class VoiceKeyboardService : InputMethodService() {
             text = label
             gravity = Gravity.CENTER
             textSize = when { label.length > 5 -> 11f; label.length > 2 -> 13f; else -> 17f }
-            setTextColor(if (primary) 0xFFC0F5E5.toInt() else Color.WHITE)
+            setTextColor(if (primary) 0xFF202B34.toInt() else Color.WHITE)
             background = GradientDrawable().apply {
-                setColor(if (primary) 0xFF21483F.toInt() else 0xFF252831.toInt())
-                cornerRadius = dp(10).toFloat()
-                setStroke(dp(1), if (primary) 0xFF32665A.toInt() else 0xFF3A414A.toInt())
+                setColor(if (primary) 0xFFBDEDDD.toInt() else 0xFF303641.toInt())
+                cornerRadius = dp(6).toFloat()
+                setStroke(dp(1), if (primary) 0xFFBDEDDD.toInt() else 0xFF454D58.toInt())
             }
+            elevation = dp(1).toFloat()
             isClickable = true; isFocusable = true
             setOnClickListener { action() }
             layoutParams = LinearLayout.LayoutParams(0, dp(40), weight).apply { marginStart = dp(2); marginEnd = dp(2) }
