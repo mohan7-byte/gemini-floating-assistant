@@ -211,7 +211,8 @@ class VoiceKeyboardService : InputMethodService() {
         renderOfflineKeys()
         applyKeyboardPalette(root)
         rememberClipboardItems()
-        showOfflineKeyboard(false)
+        // The normal QWERTY keyboard is the default; Gemini Live remains one tap away in the toolbar.
+        showOfflineKeyboard(true)
         return root
     }
 
