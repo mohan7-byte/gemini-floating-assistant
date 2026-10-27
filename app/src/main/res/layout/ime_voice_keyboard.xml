@@ -3,106 +3,104 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:background="@drawable/panel_background"
-    android:elevation="10dp"
     android:orientation="vertical"
-    android:paddingStart="5dp"
-    android:paddingEnd="5dp"
-    android:paddingTop="4dp"
-    android:paddingBottom="5dp">
+    android:paddingStart="4dp"
+    android:paddingEnd="4dp"
+    android:paddingTop="3dp"
+    android:paddingBottom="4dp">
 
+    <!-- Compact, Gboard-inspired toolbar. Every icon sits on the same surface. -->
     <LinearLayout
         android:id="@+id/imeHeader"
         android:layout_width="match_parent"
-        android:layout_height="40dp"
+        android:layout_height="42dp"
         android:gravity="center_vertical"
         android:orientation="horizontal">
         <TextView
             android:id="@+id/imeStatus"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:ellipsize="end"
-            android:gravity="center_vertical|start"
-            android:maxLines="1"
-            android:paddingStart="7dp"
-            android:paddingEnd="3dp"
-            android:text="Buddy keyboard"
-            android:textColor="@color/text_secondary"
-            android:textSize="11sp" />
+            android:layout_width="1dp"
+            android:layout_height="1dp"
+            android:visibility="gone"
+            android:importantForAccessibility="no"
+            android:text="Buddy keyboard" />
         <TextView
             android:id="@+id/btnLanguage"
-            android:layout_width="36dp"
-            android:layout_height="32dp"
-            android:layout_marginEnd="4dp"
-            android:background="@drawable/action_chip"
+            android:layout_width="0dp"
+            android:layout_height="38dp"
+            android:layout_weight="1"
+            android:background="@android:color/transparent"
             android:contentDescription="Switch English or Hindi"
             android:gravity="center"
-            android:text="EN"
-            android:textColor="@color/accent"
-            android:textSize="11sp"
-            android:textStyle="bold" />
-        <TextView
-            android:id="@+id/btnOfflineKeyboard"
-            android:layout_width="35dp"
-            android:layout_height="32dp"
-            android:layout_marginEnd="4dp"
-            android:background="@drawable/action_chip"
-            android:contentDescription="Switch to offline keyboard"
-            android:gravity="center"
-            android:text="⌨"
+            android:text="🌐"
             android:textColor="@color/text_primary"
-            android:textSize="16sp" />
-        <TextView
-            android:id="@+id/btnClipboard"
-            android:layout_width="35dp"
-            android:layout_height="32dp"
-            android:layout_marginEnd="4dp"
-            android:background="@drawable/action_chip"
-            android:contentDescription="Open clipboard history"
-            android:gravity="center"
-            android:text="▤"
-            android:textColor="@color/text_primary"
-            android:textSize="17sp" />
+            android:textSize="20sp" />
         <TextView
             android:id="@+id/btnSettings"
-            android:layout_width="35dp"
-            android:layout_height="32dp"
-            android:layout_marginEnd="4dp"
-            android:background="@drawable/action_chip"
+            android:layout_width="0dp"
+            android:layout_height="38dp"
+            android:layout_weight="1"
+            android:background="@android:color/transparent"
             android:contentDescription="Keyboard settings"
             android:gravity="center"
             android:text="⚙"
             android:textColor="@color/text_primary"
-            android:textSize="17sp" />
+            android:textSize="21sp" />
+        <TextView
+            android:id="@+id/btnOfflineKeyboard"
+            android:layout_width="0dp"
+            android:layout_height="38dp"
+            android:layout_weight="1"
+            android:background="@android:color/transparent"
+            android:contentDescription="Switch to keyboard"
+            android:gravity="center"
+            android:text="⌨"
+            android:textColor="@color/text_primary"
+            android:textSize="21sp" />
+        <TextView
+            android:id="@+id/btnTheme"
+            android:layout_width="0dp"
+            android:layout_height="38dp"
+            android:layout_weight="1"
+            android:background="@android:color/transparent"
+            android:contentDescription="Cycle keyboard theme"
+            android:gravity="center"
+            android:text="◕"
+            android:textColor="@color/text_primary"
+            android:textSize="23sp" />
+        <TextView
+            android:id="@+id/btnClipboard"
+            android:layout_width="0dp"
+            android:layout_height="38dp"
+            android:layout_weight="1"
+            android:background="@android:color/transparent"
+            android:contentDescription="Open clipboard history"
+            android:gravity="center"
+            android:text="▤"
+            android:textColor="@color/text_primary"
+            android:textSize="22sp" />
         <TextView
             android:id="@+id/btnMic"
-            android:layout_width="35dp"
-            android:layout_height="32dp"
-            android:layout_marginEnd="4dp"
-            android:background="@drawable/action_chip"
+            android:layout_width="0dp"
+            android:layout_height="38dp"
+            android:layout_weight="1"
+            android:background="@android:color/transparent"
             android:contentDescription="Start Gemini Live dictation"
             android:gravity="center"
             android:text="🎙"
             android:textColor="@color/text_primary"
-            android:textSize="17sp" />
+            android:textSize="20sp" />
         <TextView
             android:id="@+id/btnHideKeyboard"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
-            android:background="@drawable/action_chip"
+            android:layout_width="0dp"
+            android:layout_height="38dp"
+            android:layout_weight="0.8"
+            android:background="@android:color/transparent"
             android:contentDescription="Hide keyboard"
             android:gravity="center"
             android:text="⌄"
             android:textColor="@color/text_primary"
-            android:textSize="19sp" />
+            android:textSize="23sp" />
     </LinearLayout>
-
-    <View
-        android:layout_width="match_parent"
-        android:layout_height="1dp"
-        android:layout_marginTop="3dp"
-        android:layout_marginBottom="4dp"
-        android:background="#263A414A" />
 
     <LinearLayout
         android:id="@+id/voicePanel"
@@ -149,7 +147,7 @@
         <LinearLayout
             android:id="@+id/suggestionContainer"
             android:layout_width="match_parent"
-            android:layout_height="29dp"
+            android:layout_height="31dp"
             android:layout_marginTop="1dp"
             android:gravity="center_vertical"
             android:orientation="horizontal">
@@ -163,8 +161,8 @@
                 android:maxLines="1"
                 android:paddingHorizontal="4dp"
                 android:textColor="@color/text_primary"
-                android:textSize="12sp" />
-            <View android:layout_width="1dp" android:layout_height="16dp" android:background="#263A414A" />
+                android:textSize="14sp" />
+            <View android:layout_width="1dp" android:layout_height="17dp" android:background="#263A414A" />
             <TextView
                 android:id="@+id/suggestion2"
                 android:layout_width="0dp"
@@ -175,8 +173,8 @@
                 android:maxLines="1"
                 android:paddingHorizontal="4dp"
                 android:textColor="@color/text_primary"
-                android:textSize="12sp" />
-            <View android:layout_width="1dp" android:layout_height="16dp" android:background="#263A414A" />
+                android:textSize="14sp" />
+            <View android:layout_width="1dp" android:layout_height="17dp" android:background="#263A414A" />
             <TextView
                 android:id="@+id/suggestion3"
                 android:layout_width="0dp"
@@ -187,14 +185,15 @@
                 android:maxLines="1"
                 android:paddingHorizontal="4dp"
                 android:textColor="@color/text_primary"
-                android:textSize="12sp" />
+                android:textSize="14sp" />
         </LinearLayout>
         <LinearLayout
             android:id="@+id/keyboardContainer"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="3dp"
+            android:layout_marginTop="2dp"
             android:orientation="vertical" />
+
         <ScrollView
             android:id="@+id/clipboardScroll"
             android:layout_width="match_parent"
@@ -209,7 +208,52 @@
                 android:paddingTop="4dp"
                 android:paddingBottom="4dp" />
         </ScrollView>
-        <!-- Compatibility anchor for existing voice-panel toggle code. -->
+
+        <ScrollView
+            android:id="@+id/settingsScroll"
+            android:layout_width="match_parent"
+            android:layout_height="220dp"
+            android:fillViewport="true"
+            android:visibility="gone">
+            <LinearLayout
+                android:id="@+id/settingsContainer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:paddingStart="12dp"
+                android:paddingEnd="12dp"
+                android:paddingTop="8dp"
+                android:paddingBottom="8dp" />
+        </ScrollView>
+        <LinearLayout
+            android:id="@+id/settingsActions"
+            android:layout_width="match_parent"
+            android:layout_height="44dp"
+            android:gravity="end|center_vertical"
+            android:orientation="horizontal"
+            android:visibility="gone">
+            <TextView
+                android:id="@+id/btnCancelKeyboardSettings"
+                android:layout_width="88dp"
+                android:layout_height="38dp"
+                android:background="@android:color/transparent"
+                android:gravity="center"
+                android:text="Cancel"
+                android:textColor="@color/text_primary"
+                android:textSize="13sp" />
+            <TextView
+                android:id="@+id/btnSaveKeyboardSettings"
+                android:layout_width="88dp"
+                android:layout_height="38dp"
+                android:layout_marginStart="4dp"
+                android:background="@drawable/action_chip"
+                android:gravity="center"
+                android:text="Save"
+                android:textColor="@color/accent"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+        <!-- Compatibility anchor for previous voice-panel toggle code. -->
         <View
             android:id="@+id/btnBackToVoice"
             android:layout_width="1dp"
