@@ -340,6 +340,7 @@ class VoiceKeyboardService : InputMethodService() {
         isOfflineKeyboard = show
         clipboardMode = false
         settingsMode = false
+        toolbarExpanded = if (show) keyboardPrefs.getBoolean("keyboard_toolbar_expanded", false) else true
         voicePanel?.visibility = if (show) View.GONE else View.VISIBLE
         offlinePanel?.visibility = if (show) View.VISIBLE else View.GONE
         keyboardContainer?.visibility = if (show) View.VISIBLE else View.GONE
@@ -347,8 +348,7 @@ class VoiceKeyboardService : InputMethodService() {
         clipboardScroll?.visibility = View.GONE
         settingsScroll?.visibility = View.GONE
         settingsActions?.visibility = View.GONE
-        inputRoot?.findViewById<View>(R.id.suggestionContainer)?.visibility =
-            if (show && suggestionsEnabled() && !numberPage && !sensitiveInput) View.VISIBLE else View.GONE
+        inputRoot?.findViewById<View>(R.id.suggestionContainer)?.visibility = if (show) View.VISIBLE else View.GONE
         val toggle = inputRoot?.findViewById<TextView>(R.id.btnOfflineKeyboard)
         toggle?.contentDescription = if (show) "Switch to voice controls" else "Switch to keyboard"
         languageButton?.contentDescription = "Current language: $offlineLanguage. Tap to switch."
@@ -363,6 +363,8 @@ class VoiceKeyboardService : InputMethodService() {
             displaySuggestions(emptyList())
             showStatus(if (recording) "Listening · live text" else "Gemini Live voice typing")
         }
+        applyToolbarExpansion()
+        updateSuggestionStripVisibility()
         applyKeyboardPalette(inputRoot)
     }
 
@@ -376,6 +378,8 @@ class VoiceKeyboardService : InputMethodService() {
         isOfflineKeyboard = true
         clipboardMode = true
         settingsMode = false
+        toolbarExpanded = true
+        applyToolbarExpansion()
         voicePanel?.visibility = View.GONE
         offlinePanel?.visibility = View.VISIBLE
         keyboardContainer?.visibility = View.GONE
@@ -394,6 +398,8 @@ class VoiceKeyboardService : InputMethodService() {
         isOfflineKeyboard = true
         clipboardMode = false
         settingsMode = true
+        toolbarExpanded = true
+        applyToolbarExpansion()
         voicePanel?.visibility = View.GONE
         offlinePanel?.visibility = View.VISIBLE
         keyboardContainer?.visibility = View.GONE
@@ -458,7 +464,44 @@ class VoiceKeyboardService : InputMethodService() {
         }
         settingsSuggestions = suggestions
         container.addView(suggestions)
-        container.addView(label("Suggestions work offline. Android's spell checker is used when available.", false))
+        container.addView(label("Instant offline completions with system spelling help when available.", false))
+        val autoLearn = CheckBox(this).apply {
+            text = "Learn English words as I type"
+            textSize = 13f
+            setTextColor(foreground)
+            isChecked = autoLearnEnglishEnabled()
+        }
+        settingsAutoLearn = autoLearn
+        container.addView(autoLearn)
+        val alternateHints = CheckBox(this).apply {
+            text = "Show alternate symbols on keys"
+            textSize = 13f
+            setTextColor(foreground)
+            isChecked = alternateHintsEnabled()
+        }
+        settingsAlternateHints = alternateHints
+        container.addView(alternateHints)
+        val clearLearned = TextView(this).apply {
+            text = "Clear learned English words"
+            textSize = 13f
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(10), dp(8), dp(10), dp(8))
+            setTextColor(if (dark) 0xFFFFB4AB.toInt() else 0xFF9D2933.toInt())
+            background = GradientDrawable().apply {
+                setColor(surface)
+                cornerRadius = dp(9).toFloat()
+            }
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(40)).apply {
+                topMargin = dp(4)
+                bottomMargin = dp(4)
+            }
+            setOnClickListener {
+                clearLearnedEnglishWords()
+                text = "Learned English words cleared"
+            }
+        }
+        settingsClearLearnedButton = clearLearned
+        container.addView(clearLearned)
 
         container.addView(label("Keyboard height", true))
         val heightLabel = label("Height: ${keyboardPrefs.getInt("keyboard_height_percent", 100).coerceIn(80, 125)}%", false)
@@ -524,6 +567,8 @@ class VoiceKeyboardService : InputMethodService() {
             .putString("keyboard_theme", theme)
             .putBoolean("keyboard_number_row", settingsNumberRow?.isChecked ?: true)
             .putBoolean("keyboard_suggestions_enabled", settingsSuggestions?.isChecked ?: true)
+            .putBoolean("keyboard_autolearn_english", settingsAutoLearn?.isChecked ?: false)
+            .putBoolean("keyboard_alternate_hints", settingsAlternateHints?.isChecked ?: true)
             .putInt("keyboard_height_percent", (settingsHeightSeek?.progress ?: 20) + 80)
             .putString("voice_custom_keys", customKeys.joinToString(","))
             .apply()
@@ -558,6 +603,7 @@ class VoiceKeyboardService : InputMethodService() {
         offlineLanguage = if (offlineLanguage == "EN") "HI" else "EN"
         shifted = false
         numberPage = false
+        numberOnlyPage = false
         languageButton?.contentDescription = "Current language: $offlineLanguage. Tap to switch."
         renderOfflineKeys()
         if (isOfflineKeyboard) {
@@ -593,46 +639,52 @@ class VoiceKeyboardService : InputMethodService() {
         val container = keyboardContainer ?: return
         container.removeAllViews()
         val baseRows: List<List<String>> = when {
+            numberPage && numberOnlyPage -> listOf(
+                listOf("1","2","3"),
+                listOf("4","5","6"),
+                listOf("7","8","9"),
+                listOf("#+=","0",".","⌫","↵")
+            )
             numberPage -> listOf(
                 listOf("1","2","3","4","5","6","7","8","9","0"),
                 listOf("@","#","\$","%","&","-","+","(",")"),
                 listOf("*","\"","'",";",":","!","?","⌫"),
-                listOf("ABC","\\","=","Space",".",",","↵")
+                listOf("ABC","123","\\","Space",".",",","↵")
             )
             offlineLanguage == "EN" -> listOf(
                 listOf("q","w","e","r","t","y","u","i","o","p"),
                 listOf("a","s","d","f","g","h","j","k","l"),
                 listOf("⇧","z","x","c","v","b","n","m","⌫"),
-                listOf("?123",",","/","Space",".","↵")
+                listOf("?123",",","Space",".","↵")
             )
             !shifted -> listOf(
                 listOf("अ","आ","इ","ई","उ","ऊ","ए","ऐ","ओ","औ"),
                 listOf("क","ख","ग","घ","ङ","च","छ","ज","झ","ञ"),
                 listOf("ट","ठ","ड","ढ","ण","त","थ","द","ध","न"),
                 listOf("⇧","प","फ","ब","भ","म","य","र","ल","⌫"),
-                listOf("?123","ं","/","Space","्","↵")
+                listOf("?123","ं","Space","्","↵")
             )
             else -> listOf(
                 listOf("ऋ","अं","अः","क्ष","त्र","ज्ञ","श्र","ड़","ढ़","फ़"),
                 listOf("व","श","ष","स","ह","ळ","क़","ख़","ग़","ज़"),
                 listOf("ा","ि","ी","ु","ू","ृ","े","ै","ो","ौ"),
                 listOf("⇧","ं","ः","्","ँ","ॉ","ौ","ॄ","ऽ","⌫"),
-                listOf("?123","।","/","Space","॰","↵")
+                listOf("?123","।","Space","॰","↵")
             )
         }
         val rows = if (numberRowEnabled() && !numberPage) listOf(listOf("1","2","3","4","5","6","7","8","9","0")) + baseRows else baseRows
-        rows.forEachIndexed { rowIndex, rowKeys ->
+        rows.forEach { rowKeys ->
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER
                 layoutParams = LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
-                    dp(((if (numberPage) 43 else if (offlineLanguage == "HI") 37 else 39) * keyboardScale()).toInt())
+                    dp(((if (numberPage) 44 else if (offlineLanguage == "HI") 39 else 41) * keyboardScale()).toInt())
                 ).apply {
                     bottomMargin = dp((3 * keyboardScale()).toInt())
                     val sideInset = when {
-                        numberPage -> dp(28)
-                        rowKeys.firstOrNull() == "a" && offlineLanguage == "EN" -> dp(9)
+                        numberOnlyPage || numberPage -> 0
+                        rowKeys.firstOrNull() == "a" && offlineLanguage == "EN" -> dp(8)
                         rowKeys.firstOrNull() == "⇧" && offlineLanguage == "EN" -> dp(2)
                         else -> 0
                     }
@@ -642,13 +694,12 @@ class VoiceKeyboardService : InputMethodService() {
             }
             rowKeys.forEach { key ->
                 val weight = when (key) {
-                    "Space" -> 2.15f
-                    "?123","ABC","🌐","↵","⇧","⌫" -> 1.3f
+                    "Space" -> 2.65f
+                    "?123","ABC","123","#+=","↵","⇧","⌫" -> 1.3f
                     else -> 1f
                 }
                 val label = when {
                     key == "Space" -> "space"
-                    key == "🌐" -> "🌐"
                     key == "⇧" && shifted && offlineLanguage == "EN" -> "⬆"
                     key == "⇧" -> "⇧"
                     key.length == 1 && offlineLanguage == "EN" && shifted && key[0].isLetter() -> key.uppercase()
@@ -659,31 +710,25 @@ class VoiceKeyboardService : InputMethodService() {
                         "⌫" -> deleteOne()
                         "Space" -> commit(" ")
                         "↵" -> enterKey()
-                        "🌐" -> switchLanguage()
                         "⇧" -> { shifted = !shifted; renderOfflineKeys() }
-                        "?123" -> { numberPage = true; renderOfflineKeys() }
-                        "ABC" -> { numberPage = false; shifted = false; renderOfflineKeys() }
+                        "?123" -> { numberPage = true; numberOnlyPage = false; renderOfflineKeys() }
+                        "ABC" -> { numberPage = false; numberOnlyPage = false; shifted = false; renderOfflineKeys() }
+                        "123" -> { numberOnlyPage = true; renderOfflineKeys() }
+                        "#+=" -> { numberOnlyPage = false; renderOfflineKeys() }
                         else -> {
-                            val output = if (offlineLanguage == "EN" && shifted && key.length == 1 && key[0].isLetter()) key.uppercase() else key
-                            commit(output)
+                            commit(if (offlineLanguage == "EN" && shifted && key.length == 1 && key[0].isLetter()) key.uppercase() else key)
                             if (offlineLanguage == "EN" && shifted) { shifted = false; renderOfflineKeys() }
                         }
                     }
                 }
                 if (!numberPage && offlineLanguage == "EN" && key.length == 1 && key[0].isLetter()) {
                     alternateSymbol(key)?.let { alternate ->
-                        val decorated = android.text.SpannableString("$label$alternate")
-                        decorated.setSpan(
-                            android.text.style.RelativeSizeSpan(0.55f),
-                            label.length, label.length + alternate.length,
-                            android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
-                        )
-                        decorated.setSpan(
-                            android.text.style.SuperscriptSpan(),
-                            label.length, label.length + alternate.length,
-                            android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
-                        )
-                        button.text = decorated
+                        if (alternateHintsEnabled()) {
+                            val decorated = android.text.SpannableString("$label$alternate")
+                            decorated.setSpan(android.text.style.RelativeSizeSpan(0.55f), label.length, label.length + alternate.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                            decorated.setSpan(android.text.style.SuperscriptSpan(), label.length, label.length + alternate.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                            button.text = decorated
+                        }
                         button.setOnLongClickListener {
                             commit(alternate)
                             if (shifted) { shifted = false; renderOfflineKeys() }
@@ -697,9 +742,31 @@ class VoiceKeyboardService : InputMethodService() {
             }
             container.addView(row)
         }
-        // Keep the numeric page truly numeric: hide the word suggestion strip.
-        inputRoot?.findViewById<View>(R.id.suggestionContainer)?.visibility =
-            if (numberPage || !suggestionsEnabled() || sensitiveInput || clipboardMode || settingsMode) View.GONE else View.VISIBLE
+        updateSuggestionStripVisibility()
+        if (numberPage || !suggestionsEnabled() || sensitiveInput || clipboardMode || settingsMode) displaySuggestions(emptyList())
+        else refreshSuggestions()
+    }
+
+    private fun updateSuggestionStripVisibility() {
+        val strip = inputRoot?.findViewById<View>(R.id.suggestionContainer) ?: return
+        val visible = isOfflineKeyboard && !clipboardMode && !settingsMode
+        strip.visibility = if (visible) View.VISIBLE else View.GONE
+        inputRoot?.findViewById<View>(R.id.btnToggleToolbar)?.visibility = if (visible) View.VISIBLE else View.GONE
+    }
+
+    private fun applyToolbarExpansion() {
+        inputRoot?.findViewById<View>(R.id.imeHeader)?.visibility =
+            if (toolbarExpanded || clipboardMode || settingsMode) View.VISIBLE else View.GONE
+        inputRoot?.findViewById<TextView>(R.id.btnToggleToolbar)?.rotation = if (toolbarExpanded) 180f else 0f
+        inputRoot?.findViewById<TextView>(R.id.btnToggleToolbar)?.contentDescription =
+            if (toolbarExpanded) "Collapse keyboard toolbar" else "Show keyboard toolbar"
+        applyToolbarIcons()
+    }
+
+    private fun setToolbarExpanded(expanded: Boolean, persist: Boolean = true) {
+        toolbarExpanded = expanded
+        if (persist) keyboardPrefs.edit().putBoolean("keyboard_toolbar_expanded", expanded).apply()
+        applyToolbarExpansion()
     }
 
     private fun openSpellChecker() {
