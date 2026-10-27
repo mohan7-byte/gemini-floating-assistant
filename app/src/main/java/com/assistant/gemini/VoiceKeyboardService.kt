@@ -35,6 +35,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
+import java.util.concurrent.ConcurrentHashMap
 import android.widget.LinearLayout
 import android.widget.TextView
 import kotlin.math.abs
@@ -90,8 +91,8 @@ class VoiceKeyboardService : InputMethodService() {
     private var inputRoot: View? = null
     private var suggestionViews: List<TextView> = emptyList()
     private var spellCheckerSession: SpellCheckerSession? = null
-    private val pendingSuggestionWords = mutableMapOf<Int, String>()
-    private var latestSuggestionRequest = 0
+    private val pendingSuggestionWords = ConcurrentHashMap<Int, String>()
+    @Volatile private var latestSuggestionRequest = 0
 
     // Small on-device vocabulary: immediate suggestions work even without a configured Android spell checker.
     private val offlineEnglishWords = """
@@ -126,7 +127,7 @@ class VoiceKeyboardService : InputMethodService() {
         नमस्ते कृपया मदद दोस्त परिवार फोन मोबाइल कंप्यूटर किताब दुनिया लोग चीज चीज़ जगह रास्ता नाम नंबर
         जल्दी आसान सुंदर बढ़िया बेहतर अच्छा काम करता करते करती मदद चाहिए सेटिंग कुंजीपटल कीबोर्ड
     """.trimIndent().split(Regex("\\s+")).distinct()
-    private var activeSuggestionWord = ""
+    @Volatile private var activeSuggestionWord = ""
     private val spellCheckerListener = object : SpellCheckerSession.SpellCheckerSessionListener {
         override fun onGetSuggestions(results: Array<out SuggestionsInfo>) {
             val info = results.firstOrNull() ?: return
@@ -653,7 +654,7 @@ class VoiceKeyboardService : InputMethodService() {
         }
         // Keep the numeric page truly numeric: hide the word suggestion strip.
         inputRoot?.findViewById<View>(R.id.suggestionContainer)?.visibility =
-            if (numberPage || !suggestionsEnabled() || clipboardMode) View.GONE else View.VISIBLE
+            if (numberPage || !suggestionsEnabled() || sensitiveInput || clipboardMode || settingsMode) View.GONE else View.VISIBLE
     }
 
     private fun openSpellChecker() {
@@ -900,26 +901,30 @@ class VoiceKeyboardService : InputMethodService() {
         val imageMime = mimeTypes.firstOrNull { it.startsWith("image/") }
         for (i in 0 until minOf(clip.itemCount, 5)) {
             val item = clip.getItemAt(i)
+            // Some image clips also contain a filename/label as text; prioritize the image URI.
+            val source = item.uri
+            val mime = if (source != null) {
+                runCatching { contentResolver.getType(source) }.getOrNull() ?: imageMime
+            } else null
+            if (source != null && mime?.startsWith("image/") == true) {
+                val sourceString = source.toString()
+                val previous = entries.firstOrNull { it.sourceUri == sourceString }
+                val savedUri = previous?.uri ?: cacheClipboardImage(source, mime)?.toString() ?: sourceString
+                added.add(ClipboardEntry(
+                    id = "image:" + sourceString.hashCode().toString(),
+                    uri = savedUri,
+                    mimeType = mime,
+                    pinned = previous?.pinned ?: false,
+                    sourceUri = sourceString
+                ))
+                continue
+            }
             val text = runCatching { item.text?.toString() }.getOrNull()?.takeIf { it.isNotBlank() }
             if (text != null) {
                 val id = "text:" + text.hashCode().toString()
                 val previous = entries.firstOrNull { it.id == id }
                 added.add(ClipboardEntry(id = id, text = text.take(12000), pinned = previous?.pinned ?: false))
-                continue
             }
-            val source = item.uri ?: continue
-            val mime = imageMime ?: runCatching { contentResolver.getType(source) }.getOrNull() ?: continue
-            if (!mime.startsWith("image/")) continue
-            val sourceString = source.toString()
-            val previous = entries.firstOrNull { it.sourceUri == sourceString }
-            val savedUri = previous?.uri ?: cacheClipboardImage(source, mime)?.toString() ?: sourceString
-            added.add(ClipboardEntry(
-                id = "image:" + sourceString.hashCode().toString(),
-                uri = savedUri,
-                mimeType = mime,
-                pinned = previous?.pinned ?: false,
-                sourceUri = sourceString
-            ))
         }
         if (added.isEmpty()) return
         val combined = (added + entries.filterNot { old -> added.any { it.id == old.id } }).distinctBy { it.id }
