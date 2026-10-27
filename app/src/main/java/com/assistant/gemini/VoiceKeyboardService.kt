@@ -219,12 +219,10 @@ class VoiceKeyboardService : InputMethodService() {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ))
+            canSwipeToHide = { !clipboardMode && !settingsMode }
             onSwipeDown = {
-                // Scrollable panels must remain scrollable; swipe-to-hide applies to the typing view.
-                if (!clipboardMode && !settingsMode) {
-                    stopDictation()
-                    requestHideSelf(0)
-                }
+                stopDictation()
+                requestHideSelf(0)
             }
         }
     }
@@ -1336,6 +1334,7 @@ class VoiceKeyboardService : InputMethodService() {
  * touch first so long-press delete and spacebar gestures do not remain stuck.
  */
 private class KeyboardSwipeDismissLayout(context: Context) : LinearLayout(context) {
+    var canSwipeToHide: (() -> Boolean)? = null
     var onSwipeDown: (() -> Unit)? = null
     private var downX = 0f
     private var downY = 0f
@@ -1357,7 +1356,8 @@ private class KeyboardSwipeDismissLayout(context: Context) : LinearLayout(contex
             MotionEvent.ACTION_MOVE -> {
                 val deltaY = event.rawY - downY
                 val deltaX = abs(event.rawX - downX)
-                if (deltaY > swipeThreshold && deltaY > deltaX * 1.15f) {
+                if ((canSwipeToHide?.invoke() ?: true) &&
+                    deltaY > swipeThreshold && deltaY > deltaX * 1.15f) {
                     val cancel = MotionEvent.obtain(event).apply { action = MotionEvent.ACTION_CANCEL }
                     super.dispatchTouchEvent(cancel)
                     cancel.recycle()
