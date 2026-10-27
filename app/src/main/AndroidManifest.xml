@@ -39,6 +39,15 @@
             <intent-filter><action android:name="android.view.InputMethod" /></intent-filter>
             <meta-data android:name="android.view.im" android:resource="@xml/voice_keyboard_method" />
         </service>
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.keyboardfiles"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/keyboard_clip_paths" />
+        </provider>
         <service
             android:name=".BuddyRecognitionService"
             android:label="Buddy speech recognition"

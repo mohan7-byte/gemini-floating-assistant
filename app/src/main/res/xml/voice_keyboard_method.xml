@@ -4,4 +4,8 @@
         android:label="@string/voice_keyboard_label"
         android:imeSubtypeLocale="en_US"
         android:imeSubtypeMode="keyboard" />
+    <subtype
+        android:label="@string/voice_keyboard_label"
+        android:imeSubtypeLocale="hi_IN"
+        android:imeSubtypeMode="keyboard" />
 </input-method>
