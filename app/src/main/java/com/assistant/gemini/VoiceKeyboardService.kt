@@ -7,6 +7,8 @@ import android.net.Uri
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.content.res.ColorStateList
+import android.animation.ObjectAnimator
+import android.animation.ValueAnimator
 import android.graphics.drawable.GradientDrawable
 import android.inputmethodservice.InputMethodService
 import android.os.Handler
@@ -57,11 +59,21 @@ class VoiceKeyboardService : InputMethodService() {
     private var settingsThemeGroup: RadioGroup? = null
     private var settingsNumberRow: CheckBox? = null
     private var settingsSuggestions: CheckBox? = null
+    private var settingsAutoLearn: CheckBox? = null
+    private var settingsAlternateHints: CheckBox? = null
+    private var settingsClearLearnedButton: TextView? = null
     private var settingsHeightSeek: SeekBar? = null
     private var settingsCustomKeyChecks: LinkedHashMap<String, CheckBox> = linkedMapOf()
     private var settingsHeightLabel: TextView? = null
     private var clipboardMode = false
     private var sensitiveInput = true
+    private var toolbarExpanded = false
+    private var numberOnlyPage = false
+    @Volatile private var geminiConnected = false
+    private var micPulseAnimator: ObjectAnimator? = null
+    private var clipboardManager: ClipboardManager? = null
+    private var clipboardListenerRegistered = false
+    private var learnedEnglishWordsCache: LinkedHashMap<String, Int>? = null
 
     private data class ClipboardEntry(
         val id: String,
@@ -75,6 +87,8 @@ class VoiceKeyboardService : InputMethodService() {
     private val keyboardPrefs get() = SecurePrefs.get(this)
     private fun suggestionsEnabled() = keyboardPrefs.getBoolean("keyboard_suggestions_enabled", true)
     private fun numberRowEnabled() = keyboardPrefs.getBoolean("keyboard_number_row", true)
+    private fun autoLearnEnglishEnabled() = keyboardPrefs.getBoolean("keyboard_autolearn_english", false)
+    private fun alternateHintsEnabled() = keyboardPrefs.getBoolean("keyboard_alternate_hints", true)
     private fun keyboardScale() = keyboardPrefs.getInt("keyboard_height_percent", 100).coerceIn(80, 125) / 100f
     private fun darkKeyboard(): Boolean {
         return when (keyboardPrefs.getString("keyboard_theme", "system")) {
@@ -169,6 +183,7 @@ class VoiceKeyboardService : InputMethodService() {
 
     override fun onCreateInputView(): View {
         val root = layoutInflater.inflate(R.layout.ime_voice_keyboard, null)
+        toolbarExpanded = keyboardPrefs.getBoolean("keyboard_toolbar_expanded", false)
         inputRoot = root
         statusView = root.findViewById(R.id.imeStatus)
         dictateButton = root.findViewById(R.id.btnDictate)
@@ -198,12 +213,18 @@ class VoiceKeyboardService : InputMethodService() {
             if (clipboardMode) showOfflineKeyboard(true) else showClipboardPanel()
         }
         root.findViewById<View>(R.id.btnSettings).setOnClickListener { showKeyboardSettings() }
+        root.findViewById<View>(R.id.btnToggleToolbar).setOnClickListener { setToolbarExpanded(!toolbarExpanded) }
         root.findViewById<View>(R.id.btnTheme).setOnClickListener { cycleKeyboardTheme() }
         root.findViewById<View>(R.id.btnSaveKeyboardSettings).setOnClickListener { saveKeyboardSettings() }
         root.findViewById<View>(R.id.btnCancelKeyboardSettings).setOnClickListener { showOfflineKeyboard(true) }
         root.findViewById<View>(R.id.btnBackToVoice).setOnClickListener { showOfflineKeyboard(false) }
         languageButton?.setOnClickListener { switchLanguage() }
         root.findViewById<View>(R.id.btnCustomizeKeys).setOnClickListener { showKeyboardSettings() }
+        clipboardManager = getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+        if (!clipboardListenerRegistered) {
+            clipboardManager?.addPrimaryClipChangedListener(clipboardChangedListener)
+            clipboardListenerRegistered = clipboardManager != null
+        }
         // Swipe down on the header/status area hides the IME; it never steals ordinary key taps.
         listOf(root.findViewById<View>(R.id.imeHeader), root.findViewById<View>(R.id.imeStatus))
             .forEach { installHideGesture(it) }
@@ -237,6 +258,7 @@ class VoiceKeyboardService : InputMethodService() {
         if (currentInputConnection == null) { showStatus("Tap a text field first."); return }
         intentionalStop = false
         recording = true
+        geminiConnected = false
         lastTranscriptChunk = ""
         dictateButton?.text = "■  Stop dictation"
         applyToolbarIcons()
@@ -244,7 +266,14 @@ class VoiceKeyboardService : InputMethodService() {
         val session = GeminiLiveSession(this, key, "gemini-3.5-transcribe-live",
             object : GeminiLiveSession.Callbacks {
                 override fun onStatus(message: String) { if (recording) showStatus(message) }
-                override fun onReady() { showStatus("Listening · live text") }
+                override fun onReady() {
+            mainHandler.post {
+                if (!recording) return@post
+                geminiConnected = true
+                applyToolbarIcons()
+                showStatus("Gemini connected · Listening")
+            }
+        }
                 override fun onTranscript(message: String, isAssistant: Boolean, isInterim: Boolean) {
                     if (isAssistant || !recording || message.isBlank()) return
                     mainHandler.post {
@@ -270,6 +299,8 @@ class VoiceKeyboardService : InputMethodService() {
                         val userStopped = intentionalStop
                         currentInputConnection?.finishComposingText()
                         recording = false
+                        geminiConnected = false
+                        stopMicPulse()
                         liveSession = null
                         lastTranscriptChunk = ""
                         composingPrefix = ""
@@ -292,13 +323,15 @@ class VoiceKeyboardService : InputMethodService() {
         if (!recording && liveSession == null) return
         intentionalStop = true
         recording = false
+        geminiConnected = false
+        stopMicPulse()
         currentInputConnection?.finishComposingText()
         val session = liveSession
         liveSession = null
         session?.close()
         dictateButton?.text = "●  Start live dictation"
         applyToolbarIcons()
-        showStatus("Dictation stopped · text kept")
+        showStatus("Disconnected from Gemini · microphone stopped")
         lastTranscriptChunk = ""
         composingPrefix = ""
     }
@@ -940,6 +973,15 @@ class VoiceKeyboardService : InputMethodService() {
         }
     }
 
+    private val clipboardChangedListener = ClipboardManager.OnPrimaryClipChangedListener {
+        mainHandler.post {
+            if (!sensitiveInput) {
+                rememberClipboardItems()
+                if (clipboardMode) renderClipboardItems()
+            }
+        }
+    }
+
     private fun rememberClipboardItems() {
         if (sensitiveInput) return
         val clip = runCatching { (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).primaryClip }.getOrNull() ?: return
@@ -1322,6 +1364,12 @@ class VoiceKeyboardService : InputMethodService() {
         deleteHeld = false
         mainHandler.removeCallbacks(deleteRepeater)
         stopDictation()
+        stopMicPulse()
+        clipboardManager?.let { manager ->
+            if (clipboardListenerRegistered) manager.removePrimaryClipChangedListener(clipboardChangedListener)
+        }
+        clipboardListenerRegistered = false
+        clipboardManager = null
         spellCheckerSession?.close()
         spellCheckerSession = null
         super.onDestroy()
