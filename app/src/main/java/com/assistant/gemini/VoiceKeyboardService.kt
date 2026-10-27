@@ -1617,7 +1617,8 @@ class VoiceKeyboardService : InputMethodService() {
             inputClass == android.text.InputType.TYPE_CLASS_PHONE
         if (numberPage != shouldShowNumbers) {
             numberPage = shouldShowNumbers
-            if (isOfflineKeyboard && !clipboardMode) renderOfflineKeys()
+            if (!shouldShowNumbers) numberOnlyPage = false
+            if (isOfflineKeyboard && !clipboardMode && !settingsMode) renderOfflineKeys()
         }
         inputRoot?.findViewById<View>(R.id.suggestionContainer)?.visibility =
             if (isOfflineKeyboard && suggestionsEnabled() && !numberPage && !sensitiveInput && !clipboardMode) View.VISIBLE else View.GONE
