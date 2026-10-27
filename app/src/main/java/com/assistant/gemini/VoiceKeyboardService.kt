@@ -1018,6 +1018,18 @@ class VoiceKeyboardService : InputMethodService() {
                     bottomMargin = dp(5)
                 }
             }
+            if (entry.uri != null) {
+                val thumbnail = android.widget.ImageView(this).apply {
+                    contentDescription = "Clipboard image preview"
+                    scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
+                    layoutParams = LinearLayout.LayoutParams(dp(42), dp(42)).apply {
+                        marginEnd = dp(8)
+                    }
+                    runCatching { setImageURI(Uri.parse(entry.uri)) }
+                    setOnClickListener { pasteClipboardEntry(entry) }
+                }
+                row.addView(thumbnail)
+            }
             val label = TextView(this).apply {
                 text = entry.text?.replace("\n", " ") ?: "Image · tap to paste"
                 maxLines = 2
