@@ -92,6 +92,40 @@ class VoiceKeyboardService : InputMethodService() {
     private var spellCheckerSession: SpellCheckerSession? = null
     private val pendingSuggestionWords = mutableMapOf<Int, String>()
     private var latestSuggestionRequest = 0
+
+    // Small on-device vocabulary: immediate suggestions work even without a configured Android spell checker.
+    private val offlineEnglishWords = """
+        a about above after again against all also always am an and any are around as at away back
+        be because been before being below between both bring build but by call came can change check
+        child children choose clear close come common could day did different do does done down during
+        each early easy end enough even every example face fact family far fast feel few find first
+        follow for form found from full get give go good great group grow had has have he head help her
+        here high him his home house how however i idea if in include inside into is it its just keep
+        kind know large last late later learn left let life light like line list little live long look
+        made make many may me mean more most move much must my name near need never new next night no
+        not now number of off often old on once one only open or other our out over own page part people
+        place plan play point pretty problem put question quick quite read real really right run same
+        say school see seem set she should show side simple since small so some something sound still
+        such take talk tell than that the their them then there these they thing think this those though
+        through time to today together too try turn two under until up use used user very voice want was
+        way we well went were what when where which while who why will with without word work world would
+        write year yes you your hello thanks thank please okay ok great good morning afternoon evening
+        tomorrow yesterday now today keyboard typing suggestion suggestions system theme settings clipboard
+        image picture delete remove pin pinned save cancel light dark english hindi language sentence
+        android app open close start stop copy paste text number symbol space enter backspace shift
+        faster reliable lightweight personal assistant because need want help make feel looks looks
+        design modern nice beautiful better best test build failed fixed working works supported
+    """.trimIndent().split(Regex("\\s+")).distinct()
+
+    private val offlineHindiWords = """
+        मैं हम आप तुम वह यह ये वे मेरा मेरी मेरे अपना अपने अपने आप आपका आपकी आपके है हैं हूँ हो था थी थे
+        और या लेकिन क्योंकि नहीं हाँ जी क्या कैसे कहाँ कब क्यों कौन कितना कितनी कितने जब तब अब अभी आज कल
+        कल सुबह शाम रात दिन समय घर काम बात पानी खाना अच्छा अच्छी अच्छे बहुत थोड़ा थोड़ी ज्यादा कम ठीक
+        सही गलत नया नई नए पुराना पुरानी भारत हिंदी अंग्रेज़ी भाषा शब्द लिखना पढ़ना बोलना सुनना देखना
+        करना करना है चाहिए सकता सकती सकते होगा होगी होंगे दिया लिया गया गई गए आए आया आई गए चलो धन्यवाद
+        नमस्ते कृपया मदद दोस्त परिवार फोन मोबाइल कंप्यूटर किताब दुनिया लोग चीज चीज़ जगह रास्ता नाम नंबर
+        जल्दी आसान सुंदर बढ़िया बेहतर अच्छा काम करता करते करती मदद चाहिए सेटिंग कुंजीपटल कीबोर्ड
+    """.trimIndent().split(Regex("\\s+")).distinct()
     private var activeSuggestionWord = ""
     private val spellCheckerListener = object : SpellCheckerSession.SpellCheckerSessionListener {
         override fun onGetSuggestions(results: Array<out SuggestionsInfo>) {
@@ -103,9 +137,11 @@ class VoiceKeyboardService : InputMethodService() {
             for (index in 0 until minOf(info.suggestionsCount, 3)) {
                 info.getSuggestionAt(index)?.takeIf { it.isNotBlank() }?.let(candidates::add)
             }
-            if (candidates.isEmpty()) candidates.add(word)
+            val merged = (candidates + offlineSuggestions(word)).distinct().take(3)
             mainHandler.post {
-                if (isOfflineKeyboard && activeSuggestionWord == word && !numberPage) displaySuggestions(candidates.distinct())
+                if (isOfflineKeyboard && activeSuggestionWord == word && !numberPage && !sensitiveInput && !clipboardMode && !settingsMode) {
+                    displaySuggestions(merged)
+                }
             }
         }
         override fun onGetSentenceSuggestions(results: Array<out SentenceSuggestionsInfo>) = Unit
@@ -474,7 +510,8 @@ class VoiceKeyboardService : InputMethodService() {
         offlineLanguage = if (offlineLanguage == "EN") "HI" else "EN"
         shifted = false
         numberPage = false
-        languageButton?.text = offlineLanguage
+        languageButton?.text = "🌐"
+        languageButton?.contentDescription = "Current language: $offlineLanguage. Tap to switch."
         renderOfflineKeys()
         if (isOfflineKeyboard) {
             openSpellChecker()
@@ -632,13 +669,50 @@ class VoiceKeyboardService : InputMethodService() {
         }.onFailure { spellCheckerSession = null }
     }
 
+    private fun isWordCharacter(character: Char): Boolean {
+        val type = Character.getType(character)
+        return character.isLetterOrDigit() ||
+            character.code in 0x0900..0x097F ||
+            type == Character.NON_SPACING_MARK.toInt() ||
+            type == Character.COMBINING_SPACING_MARK.toInt() ||
+            type == Character.ENCLOSING_MARK.toInt()
+    }
+
     private fun currentWord(): String {
         val before = currentInputConnection?.getTextBeforeCursor(96, 0)?.toString().orEmpty()
-        return before.takeLastWhile { it.isLetterOrDigit() || it.code in 0x0900..0x097F }
+        return before.takeLastWhile(::isWordCharacter)
+    }
+
+    private fun offlineSuggestions(word: String): List<String> {
+        if (word.isBlank()) return emptyList()
+        val english = offlineLanguage == "EN"
+        val normalized = if (english) word.lowercase(Locale.ROOT) else word
+        val vocabulary = if (english) offlineEnglishWords else offlineHindiWords
+        val exact = vocabulary.firstOrNull { if (english) it.equals(normalized, ignoreCase = true) else it == normalized }
+        val prefixMatches = vocabulary.asSequence()
+            .filter { candidate ->
+                if (english) candidate.startsWith(normalized, ignoreCase = true) else candidate.startsWith(normalized)
+            }
+            .take(8)
+            .map { candidate ->
+                if (english && word.firstOrNull()?.isUpperCase() == true) {
+                    candidate.replaceFirstChar { it.titlecase(Locale.ROOT) }
+                } else candidate
+            }
+            .toList()
+        val results = mutableListOf<String>()
+        if (exact != null) {
+            results.add(if (english && word.firstOrNull()?.isUpperCase() == true) {
+                exact.replaceFirstChar { it.titlecase(Locale.ROOT) }
+            } else exact)
+        }
+        results.addAll(prefixMatches.filterNot { if (english) it.equals(word, ignoreCase = true) else it == word })
+        if (results.isEmpty()) results.add(word)
+        return results.distinct().take(3)
     }
 
     private fun refreshSuggestions() {
-        if (!isOfflineKeyboard || numberPage || !suggestionsEnabled() || sensitiveInput || clipboardMode) {
+        if (!isOfflineKeyboard || numberPage || !suggestionsEnabled() || sensitiveInput || clipboardMode || settingsMode) {
             displaySuggestions(emptyList())
             return
         }
@@ -646,11 +720,13 @@ class VoiceKeyboardService : InputMethodService() {
         activeSuggestionWord = word
         latestSuggestionRequest += 1
         pendingSuggestionWords.clear()
-        if (word.isBlank() || word.length < 2) {
-            displaySuggestions(if (word.isBlank()) emptyList() else listOf(word))
+        if (word.isBlank()) {
+            displaySuggestions(emptyList())
             return
         }
-        displaySuggestions(listOf(word))
+        // Show offline completions immediately, then merge system spell-check results if available.
+        displaySuggestions(offlineSuggestions(word))
+        if (word.length < 2) return
         val checker = spellCheckerSession ?: return
         val sequence = latestSuggestionRequest
         pendingSuggestionWords[sequence] = word
@@ -1096,23 +1172,7 @@ class VoiceKeyboardService : InputMethodService() {
         }
     }
 
-    private fun customizeKeys() {
-        val input = EditText(this).apply {
-            setText(SecurePrefs.get(this@VoiceKeyboardService).getString("voice_custom_keys", "").orEmpty())
-            hint = "e.g. @, #, ₹, 👍"
-            setTextColor(Color.WHITE); setHintTextColor(0xFF9CA3AF.toInt())
-            setPadding(dp(16), dp(10), dp(16), dp(10))
-        }
-        AlertDialog.Builder(this)
-            .setTitle("Quick keys")
-            .setMessage("Up to 6 shortcuts, separated by commas.")
-            .setView(input).setNegativeButton("Cancel", null)
-            .setPositiveButton("Save") { _, _ ->
-                val keys = input.text.toString().split(",").map { it.trim() }.filter { it.isNotEmpty() }.take(6)
-                SecurePrefs.get(this).edit().putString("voice_custom_keys", keys.joinToString(",")).apply()
-                renderQuickKeys()
-            }.show()
-    }
+    private fun customizeKeys() = showKeyboardSettings()
 
     private fun keyView(label: String, weight: Float = 1f, primary: Boolean = false, action: () -> Unit): TextView =
         TextView(this).apply {
