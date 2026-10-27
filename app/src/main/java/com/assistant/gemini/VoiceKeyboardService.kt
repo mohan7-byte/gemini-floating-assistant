@@ -184,7 +184,14 @@ class VoiceKeyboardService : InputMethodService() {
             for (index in 0 until minOf(info.suggestionsCount, 3)) {
                 info.getSuggestionAt(index)?.takeIf { it.isNotBlank() }?.let(candidates::add)
             }
-            val merged = (candidates + offlineSuggestions(word)).distinct().take(3)
+            val learnedFirst = if (offlineLanguage == "EN") {
+                loadLearnedEnglishWords().entries
+                    .filter { it.key.startsWith(word, ignoreCase = true) && !it.key.equals(word, ignoreCase = true) }
+                    .sortedByDescending { it.value }
+                    .take(3)
+                    .map { matchCase(it.key, word, true) }
+            } else emptyList()
+            val merged = (learnedFirst + candidates + offlineSuggestions(word)).distinct().take(3)
             mainHandler.post {
                 if (isOfflineKeyboard && activeSuggestionWord == word && !numberPage && !sensitiveInput && !clipboardMode && !settingsMode) {
                     displaySuggestions(merged)
@@ -916,7 +923,7 @@ class VoiceKeyboardService : InputMethodService() {
         val english = offlineLanguage == "EN"
         val normalized = if (english) word.lowercase(Locale.ROOT) else word
         val vocabulary = if (english) offlineEnglishWords else offlineHindiWords
-        val learned = if (english) loadLearnedEnglishWords() else linkedMapOf()
+        val learned: Map<String, Int> = if (english) loadLearnedEnglishWords() else emptyMap()
         val ranked = linkedMapOf<String, Int>()
 
         fun add(candidate: String, score: Int) {
@@ -1617,7 +1624,7 @@ class VoiceKeyboardService : InputMethodService() {
             inputClass == android.text.InputType.TYPE_CLASS_PHONE
         if (numberPage != shouldShowNumbers) {
             numberPage = shouldShowNumbers
-            if (!shouldShowNumbers) numberOnlyPage = false
+            numberOnlyPage = shouldShowNumbers
             if (isOfflineKeyboard && !clipboardMode && !settingsMode) renderOfflineKeys()
         }
         inputRoot?.findViewById<View>(R.id.suggestionContainer)?.visibility =
