@@ -184,18 +184,18 @@ class VoiceKeyboardService : InputMethodService() {
             for (index in 0 until minOf(info.suggestionsCount, 3)) {
                 info.getSuggestionAt(index)?.takeIf { it.isNotBlank() }?.let(candidates::add)
             }
-            val learnedFirst = if (offlineLanguage == "EN") {
-                loadLearnedEnglishWords().entries
-                    .filter { it.key.startsWith(word, ignoreCase = true) && !it.key.equals(word, ignoreCase = true) }
-                    .sortedByDescending { it.value }
-                    .take(3)
-                    .map { matchCase(it.key, word, true) }
-            } else emptyList()
-            val merged = (learnedFirst + candidates + offlineSuggestions(word)).distinct().take(3)
             mainHandler.post {
-                if (isOfflineKeyboard && activeSuggestionWord == word && !numberPage && !sensitiveInput && !clipboardMode && !settingsMode) {
-                    displaySuggestions(merged)
-                }
+                if (sequence != latestSuggestionRequest || !isOfflineKeyboard ||
+                    activeSuggestionWord != word || numberPage || sensitiveInput || clipboardMode || settingsMode) return@post
+                val learnedFirst = if (offlineLanguage == "EN") {
+                    loadLearnedEnglishWords().entries
+                        .filter { it.key.startsWith(word, ignoreCase = true) && !it.key.equals(word, ignoreCase = true) }
+                        .sortedByDescending { it.value }
+                        .take(3)
+                        .map { matchCase(it.key, word, true) }
+                } else emptyList()
+                val merged = (learnedFirst + candidates + offlineSuggestions(word)).distinct().take(3)
+                displaySuggestions(merged)
             }
         }
         override fun onGetSentenceSuggestions(results: Array<out SentenceSuggestionsInfo>) = Unit
@@ -1247,7 +1247,7 @@ class VoiceKeyboardService : InputMethodService() {
 
     private val clipboardChangedListener = ClipboardManager.OnPrimaryClipChangedListener {
         mainHandler.post {
-            if (!sensitiveInput) {
+            if (!sensitiveInput && isInputViewShown()) {
                 rememberClipboardItems()
                 if (clipboardMode) renderClipboardItems()
             }
