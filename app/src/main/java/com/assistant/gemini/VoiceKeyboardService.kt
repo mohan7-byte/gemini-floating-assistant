@@ -138,6 +138,7 @@ class VoiceKeyboardService : InputMethodService() {
             }
         }
         dictateButton?.setOnClickListener { if (recording) stopDictation() else startDictation() }
+        root.findViewById<View>(R.id.btnMic).setOnClickListener { if (recording) stopDictation() else startDictation() }
         root.findViewById<View>(R.id.btnHideKeyboard).setOnClickListener { stopDictation(); requestHideSelf(0) }
         root.findViewById<View>(R.id.btnOfflineKeyboard).setOnClickListener {
             if (clipboardMode) showOfflineKeyboard(true) else showOfflineKeyboard(!isOfflineKeyboard)
@@ -172,6 +173,10 @@ class VoiceKeyboardService : InputMethodService() {
         recording = true
         lastTranscriptChunk = ""
         dictateButton?.text = "■  Stop dictation"
+        inputRoot?.findViewById<TextView>(R.id.btnMic)?.apply {
+            text = "■"
+            contentDescription = "Stop Gemini Live dictation"
+        }
         showStatus("Connecting to live transcription…")
         val session = GeminiLiveSession(this, key, "gemini-3.5-transcribe-live",
             object : GeminiLiveSession.Callbacks {
@@ -206,6 +211,10 @@ class VoiceKeyboardService : InputMethodService() {
                         lastTranscriptChunk = ""
                         composingPrefix = ""
                         dictateButton?.text = "●  Start live dictation"
+                        inputRoot?.findViewById<TextView>(R.id.btnMic)?.apply {
+                            text = "🎙"
+                            contentDescription = "Start Gemini Live dictation"
+                        }
                         showStatus(if (userStopped) "Dictation stopped" else message)
                     }
                 }
@@ -228,6 +237,10 @@ class VoiceKeyboardService : InputMethodService() {
         liveSession = null
         session?.close()
         dictateButton?.text = "●  Start live dictation"
+        inputRoot?.findViewById<TextView>(R.id.btnMic)?.apply {
+            text = "🎙"
+            contentDescription = "Start Gemini Live dictation"
+        }
         showStatus("Dictation stopped · text kept")
         lastTranscriptChunk = ""
         composingPrefix = ""
@@ -541,7 +554,7 @@ class VoiceKeyboardService : InputMethodService() {
         statusView?.setTextColor(secondaryText)
         languageButton?.setTextColor(if (dark) 0xFFA7F3D0.toInt() else 0xFF425A8A.toInt())
         suggestionViews.forEach { it.setTextColor(primaryText) }
-        listOf(R.id.btnLanguage, R.id.btnOfflineKeyboard, R.id.btnClipboard, R.id.btnSettings, R.id.btnHideKeyboard)
+        listOf(R.id.btnLanguage, R.id.btnOfflineKeyboard, R.id.btnClipboard, R.id.btnSettings, R.id.btnMic, R.id.btnHideKeyboard)
             .forEach { id ->
                 inputRoot?.findViewById<TextView>(id)?.apply {
                     setTextColor(primaryText)
