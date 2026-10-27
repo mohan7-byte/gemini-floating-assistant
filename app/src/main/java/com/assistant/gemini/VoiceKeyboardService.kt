@@ -227,10 +227,7 @@ class VoiceKeyboardService : InputMethodService() {
         recording = true
         lastTranscriptChunk = ""
         dictateButton?.text = "■  Stop dictation"
-        inputRoot?.findViewById<TextView>(R.id.btnMic)?.apply {
-            text = "■"
-            contentDescription = "Stop Gemini Live dictation"
-        }
+        applyToolbarIcons()
         showStatus("Connecting to live transcription…")
         val session = GeminiLiveSession(this, key, "gemini-3.5-transcribe-live",
             object : GeminiLiveSession.Callbacks {
@@ -265,10 +262,7 @@ class VoiceKeyboardService : InputMethodService() {
                         lastTranscriptChunk = ""
                         composingPrefix = ""
                         dictateButton?.text = "●  Start live dictation"
-                        inputRoot?.findViewById<TextView>(R.id.btnMic)?.apply {
-                            text = "🎙"
-                            contentDescription = "Start Gemini Live dictation"
-                        }
+                        applyToolbarIcons()
                         showStatus(if (userStopped) "Dictation stopped" else message)
                     }
                 }
@@ -291,10 +285,7 @@ class VoiceKeyboardService : InputMethodService() {
         liveSession = null
         session?.close()
         dictateButton?.text = "●  Start live dictation"
-        inputRoot?.findViewById<TextView>(R.id.btnMic)?.apply {
-            text = "🎙"
-            contentDescription = "Start Gemini Live dictation"
-        }
+        applyToolbarIcons()
         showStatus("Dictation stopped · text kept")
         lastTranscriptChunk = ""
         composingPrefix = ""
@@ -314,9 +305,7 @@ class VoiceKeyboardService : InputMethodService() {
         inputRoot?.findViewById<View>(R.id.suggestionContainer)?.visibility =
             if (show && suggestionsEnabled() && !numberPage && !sensitiveInput) View.VISIBLE else View.GONE
         val toggle = inputRoot?.findViewById<TextView>(R.id.btnOfflineKeyboard)
-        toggle?.text = if (show) "🎙" else "⌨"
-        toggle?.contentDescription = if (show) "Switch to voice mode" else "Switch to keyboard"
-        languageButton?.text = "🌐"
+        toggle?.contentDescription = if (show) "Switch to voice controls" else "Switch to keyboard"
         languageButton?.contentDescription = "Current language: $offlineLanguage. Tap to switch."
         if (show) {
             stopDictation()
@@ -524,7 +513,6 @@ class VoiceKeyboardService : InputMethodService() {
         offlineLanguage = if (offlineLanguage == "EN") "HI" else "EN"
         shifted = false
         numberPage = false
-        languageButton?.text = "🌐"
         languageButton?.contentDescription = "Current language: $offlineLanguage. Tap to switch."
         renderOfflineKeys()
         if (isOfflineKeyboard) {
@@ -860,6 +848,33 @@ class VoiceKeyboardService : InputMethodService() {
                 cornerRadius = dp(10).toFloat()
             }
         }
+        applyToolbarIcons()
+    }
+
+    private fun applyToolbarIcons() {
+        val tint = if (darkKeyboard()) 0xFFF1F3F4.toInt() else 0xFF343741.toInt()
+        fun setIcon(id: Int, drawableId: Int, description: String) {
+            val button = inputRoot?.findViewById<TextView>(id) ?: return
+            val drawable = androidx.core.content.ContextCompat.getDrawable(this, drawableId)?.mutate() ?: return
+            androidx.core.graphics.drawable.DrawableCompat.setTint(drawable, tint)
+            button.text = ""
+            button.setCompoundDrawablesWithIntrinsicBounds(null, drawable, null, null)
+            button.compoundDrawablePadding = 0
+            button.gravity = Gravity.CENTER
+            button.contentDescription = description
+        }
+        setIcon(R.id.btnLanguage, R.drawable.ic_language, "Switch language. Current language: $offlineLanguage")
+        setIcon(R.id.btnSettings, R.drawable.ic_keyboard_settings, "Keyboard settings")
+        setIcon(
+            R.id.btnOfflineKeyboard,
+            if (isOfflineKeyboard) R.drawable.ic_waveform else R.drawable.ic_keyboard,
+            if (isOfflineKeyboard) "Switch to voice controls" else "Switch to keyboard"
+        )
+        setIcon(R.id.btnTheme, R.drawable.ic_palette, "Cycle keyboard theme")
+        setIcon(R.id.btnClipboard, R.drawable.ic_clipboard, "Open clipboard history")
+        setIcon(R.id.btnMic, if (recording) R.drawable.ic_stop else R.drawable.ic_mic,
+            if (recording) "Stop Gemini Live dictation" else "Start Gemini Live dictation")
+        setIcon(R.id.btnHideKeyboard, R.drawable.ic_chevron_down, "Hide keyboard")
     }
 
     private fun loadClipboardEntries(): MutableList<ClipboardEntry> {
