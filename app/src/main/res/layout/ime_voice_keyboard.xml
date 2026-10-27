@@ -5,15 +5,15 @@
     android:background="@drawable/panel_background"
     android:elevation="10dp"
     android:orientation="vertical"
-    android:paddingStart="4dp"
-    android:paddingEnd="4dp"
-    android:paddingTop="3dp"
-    android:paddingBottom="4dp">
+    android:paddingStart="5dp"
+    android:paddingEnd="5dp"
+    android:paddingTop="4dp"
+    android:paddingBottom="5dp">
 
     <LinearLayout
         android:id="@+id/imeHeader"
         android:layout_width="match_parent"
-        android:layout_height="32dp"
+        android:layout_height="40dp"
         android:gravity="center_vertical"
         android:orientation="horizontal">
         <TextView
@@ -26,14 +26,14 @@
             android:maxLines="1"
             android:paddingStart="7dp"
             android:paddingEnd="3dp"
-            android:text="Buddy ready"
+            android:text="Buddy keyboard"
             android:textColor="@color/text_secondary"
             android:textSize="11sp" />
         <TextView
             android:id="@+id/btnLanguage"
-            android:layout_width="38dp"
-            android:layout_height="28dp"
-            android:layout_marginEnd="3dp"
+            android:layout_width="36dp"
+            android:layout_height="32dp"
+            android:layout_marginEnd="4dp"
             android:background="@drawable/action_chip"
             android:contentDescription="Switch English or Hindi"
             android:gravity="center"
@@ -43,9 +43,9 @@
             android:textStyle="bold" />
         <TextView
             android:id="@+id/btnOfflineKeyboard"
-            android:layout_width="34dp"
-            android:layout_height="28dp"
-            android:layout_marginEnd="3dp"
+            android:layout_width="35dp"
+            android:layout_height="32dp"
+            android:layout_marginEnd="4dp"
             android:background="@drawable/action_chip"
             android:contentDescription="Switch to offline keyboard"
             android:gravity="center"
@@ -53,22 +53,44 @@
             android:textColor="@color/text_primary"
             android:textSize="16sp" />
         <TextView
+            android:id="@+id/btnClipboard"
+            android:layout_width="35dp"
+            android:layout_height="32dp"
+            android:layout_marginEnd="4dp"
+            android:background="@drawable/action_chip"
+            android:contentDescription="Open clipboard history"
+            android:gravity="center"
+            android:text="▤"
+            android:textColor="@color/text_primary"
+            android:textSize="17sp" />
+        <TextView
+            android:id="@+id/btnSettings"
+            android:layout_width="35dp"
+            android:layout_height="32dp"
+            android:layout_marginEnd="4dp"
+            android:background="@drawable/action_chip"
+            android:contentDescription="Keyboard settings"
+            android:gravity="center"
+            android:text="⚙"
+            android:textColor="@color/text_primary"
+            android:textSize="17sp" />
+        <TextView
             android:id="@+id/btnHideKeyboard"
-            android:layout_width="34dp"
-            android:layout_height="28dp"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
             android:background="@drawable/action_chip"
             android:contentDescription="Hide keyboard"
             android:gravity="center"
             android:text="⌄"
             android:textColor="@color/text_primary"
-            android:textSize="18sp" />
+            android:textSize="19sp" />
     </LinearLayout>
 
     <View
         android:layout_width="match_parent"
         android:layout_height="1dp"
-        android:layout_marginTop="2dp"
-        android:layout_marginBottom="3dp"
+        android:layout_marginTop="3dp"
+        android:layout_marginBottom="4dp"
         android:background="#263A414A" />
 
     <LinearLayout
@@ -79,12 +101,12 @@
         <TextView
             android:id="@+id/btnDictate"
             android:layout_width="match_parent"
-            android:layout_height="42dp"
+            android:layout_height="44dp"
             android:layout_marginTop="2dp"
             android:background="@drawable/action_chip"
             android:backgroundTint="@color/accent_dark"
             android:gravity="center"
-            android:text="●  Start live dictation"
+            android:text="●  Start Gemini Live dictation"
             android:textColor="@color/accent"
             android:textSize="13sp"
             android:textStyle="bold" />
@@ -92,16 +114,16 @@
             android:id="@+id/quickKeysContainer"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
+            android:layout_marginTop="5dp"
             android:orientation="vertical" />
         <TextView
             android:id="@+id/btnCustomizeKeys"
             android:layout_width="wrap_content"
-            android:layout_height="22dp"
+            android:layout_height="24dp"
             android:layout_gravity="end"
             android:gravity="center"
-            android:paddingStart="8dp"
-            android:paddingEnd="8dp"
+            android:paddingStart="9dp"
+            android:paddingEnd="9dp"
             android:text="⚙ Quick keys"
             android:textColor="@color/text_secondary"
             android:textSize="10sp" />
@@ -116,7 +138,7 @@
         <LinearLayout
             android:id="@+id/suggestionContainer"
             android:layout_width="match_parent"
-            android:layout_height="30dp"
+            android:layout_height="29dp"
             android:layout_marginTop="1dp"
             android:gravity="center_vertical"
             android:orientation="horizontal">
@@ -162,7 +184,21 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="3dp"
             android:orientation="vertical" />
-        <!-- Compatibility anchor for the old toggle code; intentionally not visible. -->
+        <ScrollView
+            android:id="@+id/clipboardScroll"
+            android:layout_width="match_parent"
+            android:layout_height="176dp"
+            android:fillViewport="false"
+            android:visibility="gone">
+            <LinearLayout
+                android:id="@+id/clipboardContainer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:paddingTop="4dp"
+                android:paddingBottom="4dp" />
+        </ScrollView>
+        <!-- Compatibility anchor for existing voice-panel toggle code. -->
         <View
             android:id="@+id/btnBackToVoice"
             android:layout_width="1dp"
