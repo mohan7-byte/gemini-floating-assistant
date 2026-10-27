@@ -50,7 +50,7 @@ class VoiceKeyboardService : InputMethodService() {
     private var clipboardContainer: LinearLayout? = null
     private var clipboardScroll: ScrollView? = null
     private var clipboardMode = false
-    private var sensitiveInput = false
+    private var sensitiveInput = true
 
     private data class ClipboardEntry(
         val id: String,
