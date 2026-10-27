@@ -884,7 +884,7 @@ class VoiceKeyboardService : InputMethodService() {
         val directory = File(filesDir, "keyboard_clips")
         if (directory.exists()) {
             val retained = entries.mapNotNull { entry ->
-                val uri = entry.uri?.let(Uri::parse) ?: return@mapNotNull null
+                val uri = entry.uri?.let { Uri.parse(it) } ?: return@mapNotNull null
                 if (uri.authority == "$packageName.keyboardfiles") uri.lastPathSegment else null
             }.toSet()
             directory.listFiles()?.forEach { file -> if (file.name !in retained) file.delete() }
