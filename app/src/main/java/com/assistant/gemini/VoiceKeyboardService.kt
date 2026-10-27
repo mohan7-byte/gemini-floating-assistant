@@ -50,6 +50,7 @@ class VoiceKeyboardService : InputMethodService() {
     private var clipboardContainer: LinearLayout? = null
     private var clipboardScroll: ScrollView? = null
     private var clipboardMode = false
+    private var sensitiveInput = false
 
     private data class ClipboardEntry(
         val id: String,
@@ -255,7 +256,7 @@ class VoiceKeyboardService : InputMethodService() {
         clipboardContainer?.visibility = View.GONE
         clipboardScroll?.visibility = View.GONE
         inputRoot?.findViewById<View>(R.id.suggestionContainer)?.visibility =
-            if (show && suggestionsEnabled() && !numberPage) View.VISIBLE else View.GONE
+            if (show && suggestionsEnabled() && !numberPage && !sensitiveInput) View.VISIBLE else View.GONE
         val toggle = inputRoot?.findViewById<TextView>(R.id.btnOfflineKeyboard)
         toggle?.text = if (show) "🎙" else "⌨"
         toggle?.contentDescription = if (show) "Switch to Gemini Live voice typing" else "Switch to keyboard"
@@ -439,7 +440,7 @@ class VoiceKeyboardService : InputMethodService() {
     }
 
     private fun openSpellChecker() {
-        if (!suggestionsEnabled()) {
+        if (!suggestionsEnabled() || sensitiveInput) {
             spellCheckerSession?.close()
             spellCheckerSession = null
             return
@@ -458,7 +459,7 @@ class VoiceKeyboardService : InputMethodService() {
     }
 
     private fun refreshSuggestions() {
-        if (!isOfflineKeyboard || numberPage || !suggestionsEnabled() || clipboardMode) {
+        if (!isOfflineKeyboard || numberPage || !suggestionsEnabled() || sensitiveInput || clipboardMode) {
             displaySuggestions(emptyList())
             return
         }
@@ -693,6 +694,7 @@ class VoiceKeyboardService : InputMethodService() {
     }
 
     private fun rememberClipboardItems() {
+        if (sensitiveInput) return
         val clip = runCatching { (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).primaryClip }.getOrNull() ?: return
         val entries = loadClipboardEntries()
         val added = mutableListOf<ClipboardEntry>()
@@ -1015,7 +1017,26 @@ class VoiceKeyboardService : InputMethodService() {
 
     override fun onStartInputView(info: android.view.inputmethod.EditorInfo?, restarting: Boolean) {
         super.onStartInputView(info, restarting)
-        rememberClipboardItems()
+        val inputType = info?.inputType ?: 0
+        val inputClass = inputType and android.text.InputType.TYPE_MASK_CLASS
+        val variation = inputType and android.text.InputType.TYPE_MASK_VARIATION
+        sensitiveInput =
+            (inputClass == android.text.InputType.TYPE_CLASS_TEXT &&
+                variation in setOf(
+                    android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD,
+                    android.text.InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD,
+                    android.text.InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD
+                )) ||
+            (inputClass == android.text.InputType.TYPE_CLASS_NUMBER &&
+                variation == android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD) ||
+            ((info?.imeOptions ?: 0) and android.view.inputmethod.EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING) != 0
+        val shouldShowNumbers = inputClass == android.text.InputType.TYPE_CLASS_NUMBER ||
+            inputClass == android.text.InputType.TYPE_CLASS_PHONE
+        if (numberPage != shouldShowNumbers) {
+            numberPage = shouldShowNumbers
+            if (isOfflineKeyboard && !clipboardMode) renderOfflineKeys()
+        }
+        if (!sensitiveInput) rememberClipboardItems()
         if (isOfflineKeyboard) {
             openSpellChecker()
             refreshSuggestions()
