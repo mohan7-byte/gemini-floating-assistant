@@ -1109,10 +1109,15 @@ class VoiceKeyboardService : InputMethodService() {
 
     private fun applyToolbarIcons() {
         val tint = if (darkKeyboard()) 0xFFF1F3F4.toInt() else 0xFF343741.toInt()
-        fun setIcon(id: Int, drawableId: Int, description: String) {
+        val micTint = when {
+            geminiConnected -> if (darkKeyboard()) 0xFFA7F3D0.toInt() else 0xFF16834A.toInt()
+            recording -> if (darkKeyboard()) 0xFFFFD180.toInt() else 0xFF9A6500.toInt()
+            else -> tint
+        }
+        fun setIcon(id: Int, drawableId: Int, description: String, iconTint: Int = tint) {
             val button = inputRoot?.findViewById<TextView>(id) ?: return
             val drawable = androidx.core.content.ContextCompat.getDrawable(this, drawableId)?.mutate() ?: return
-            androidx.core.graphics.drawable.DrawableCompat.setTint(drawable, tint)
+            androidx.core.graphics.drawable.DrawableCompat.setTint(drawable, iconTint)
             button.text = ""
             button.setCompoundDrawablesWithIntrinsicBounds(null, drawable, null, null)
             button.compoundDrawablePadding = 0
@@ -1129,8 +1134,43 @@ class VoiceKeyboardService : InputMethodService() {
         setIcon(R.id.btnTheme, R.drawable.ic_palette, "Cycle keyboard theme")
         setIcon(R.id.btnClipboard, R.drawable.ic_clipboard, "Open clipboard history")
         setIcon(R.id.btnMic, if (recording) R.drawable.ic_stop else R.drawable.ic_mic,
-            if (recording) "Stop Gemini Live dictation" else "Start Gemini Live dictation")
+            if (recording) "Stop Gemini Live dictation" else "Start Gemini Live dictation", micTint)
         setIcon(R.id.btnHideKeyboard, R.drawable.ic_chevron_down, "Hide keyboard")
+        setIcon(R.id.btnToggleToolbar, R.drawable.ic_chevron_down,
+            if (toolbarExpanded) "Collapse keyboard toolbar" else "Show keyboard toolbar")
+        inputRoot?.findViewById<View>(R.id.btnToggleToolbar)?.rotation = if (toolbarExpanded) 180f else 0f
+        refreshMicIndicator()
+    }
+
+    private fun refreshMicIndicator() {
+        val mic = inputRoot?.findViewById<TextView>(R.id.btnMic) ?: return
+        if (recording && geminiConnected) {
+            mic.background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(if (darkKeyboard()) 0xFF164E42.toInt() else 0xFFD7F4E3.toInt())
+            }
+            if (micPulseAnimator?.isRunning != true) {
+                micPulseAnimator?.cancel()
+                micPulseAnimator = ObjectAnimator.ofFloat(mic, View.ALPHA, 0.55f, 1f).apply {
+                    duration = 720L
+                    repeatCount = ValueAnimator.INFINITE
+                    repeatMode = ValueAnimator.REVERSE
+                    start()
+                }
+            }
+        } else {
+            stopMicPulse()
+            mic.background = GradientDrawable().apply {
+                setColor(if (darkKeyboard()) 0xFF202124.toInt() else 0xFFEFF1F8.toInt())
+                cornerRadius = dp(18).toFloat()
+            }
+        }
+    }
+
+    private fun stopMicPulse() {
+        micPulseAnimator?.cancel()
+        micPulseAnimator = null
+        inputRoot?.findViewById<View>(R.id.btnMic)?.alpha = 1f
     }
 
     private fun loadClipboardEntries(): MutableList<ClipboardEntry> {
@@ -1474,14 +1514,21 @@ class VoiceKeyboardService : InputMethodService() {
             )
             elevation = dp(1).toFloat()
             isClickable = true; isFocusable = true
+            setOnTouchListener { view, event ->
+                when (event.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> view.animate().cancel().scaleX(0.965f).scaleY(0.965f).setDuration(45L).start()
+                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> view.animate().scaleX(1f).scaleY(1f).setDuration(90L).start()
+                }
+                false
+            }
             setOnClickListener { action() }
             val keyHeight = when {
                 !isOfflineKeyboard -> 36
-                numberPage -> 40
-                offlineLanguage == "HI" -> 34
-                else -> 36
+                numberPage -> 42
+                offlineLanguage == "HI" -> 36
+                else -> 38
             }
-            layoutParams = LinearLayout.LayoutParams(0, dp((keyHeight * keyboardScale()).toInt()), weight).apply { marginStart = dp(2); marginEnd = dp(2) }
+            layoutParams = LinearLayout.LayoutParams(0, dp((keyHeight * keyboardScale()).toInt()), weight).apply { marginStart = dp(1); marginEnd = dp(1) }
         }
 
     private fun commit(text: String) {
