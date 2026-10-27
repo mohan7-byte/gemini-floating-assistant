@@ -187,6 +187,16 @@
                 android:textColor="@color/text_primary"
                 android:textSize="14sp" />
         <TextView
+            android:id="@+id/btnMicCompact"
+            android:layout_width="32dp"
+            android:layout_height="match_parent"
+            android:background="@android:color/transparent"
+            android:contentDescription="Start Gemini Live dictation"
+            android:gravity="center"
+            android:text="●"
+            android:textColor="@color/text_primary"
+            android:textSize="18sp" />
+        <TextView
             android:id="@+id/btnToggleToolbar"
             android:layout_width="34dp"
             android:layout_height="match_parent"
