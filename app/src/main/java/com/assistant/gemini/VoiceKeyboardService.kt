@@ -822,10 +822,19 @@ class VoiceKeyboardService : InputMethodService() {
         ).forEach { id ->
             inputRoot?.findViewById<TextView>(id)?.apply {
                 setTextColor(primaryText)
-                background = GradientDrawable().apply {
+                val shape = GradientDrawable().apply {
                     setColor(backgroundColor)
-                    cornerRadius = dp(12).toFloat()
+                    cornerRadius = dp(18).toFloat()
                 }
+                val mask = GradientDrawable().apply {
+                    setColor(Color.WHITE)
+                    cornerRadius = dp(18).toFloat()
+                }
+                background = android.graphics.drawable.RippleDrawable(
+                    ColorStateList.valueOf(if (dark) 0x337E8A9E.toInt() else 0x22000000),
+                    shape,
+                    mask
+                )
                 elevation = 0f
                 isClickable = true
                 isFocusable = true
@@ -1188,9 +1197,10 @@ class VoiceKeyboardService : InputMethodService() {
                 else -> 0xFF20232B.toInt()
             }
             setTextColor(foreground)
-            background = GradientDrawable().apply {
+            val radius = dp(if (dark) 7 else 8).toFloat()
+            val keyShape = GradientDrawable().apply {
                 setColor(fill)
-                cornerRadius = dp(if (dark) 7 else 8).toFloat()
+                cornerRadius = radius
                 setStroke(dp(1), when {
                     primary && dark -> 0xFFBDEDDD.toInt()
                     primary -> 0xFFDCE6FF.toInt()
@@ -1198,6 +1208,15 @@ class VoiceKeyboardService : InputMethodService() {
                     else -> 0xFFE4E7EF.toInt()
                 })
             }
+            val rippleMask = GradientDrawable().apply {
+                setColor(Color.WHITE)
+                cornerRadius = radius
+            }
+            background = android.graphics.drawable.RippleDrawable(
+                ColorStateList.valueOf(if (dark) 0x337E8A9E.toInt() else 0x22000000),
+                keyShape,
+                rippleMask
+            )
             elevation = dp(1).toFloat()
             isClickable = true; isFocusable = true
             setOnClickListener { action() }
