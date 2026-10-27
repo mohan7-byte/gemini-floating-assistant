@@ -319,7 +319,7 @@ class VoiceKeyboardService : InputMethodService() {
             numberPage -> listOf(
                 listOf("1","2","3","4","5","6","7","8","9","0"),
                 listOf("@","#","$","%","&","-","+","(",")"),
-                listOf("*","\\"","'",";",":","!","?","⌫"),
+                listOf("*","\"","'",";",":","!","?","⌫"),
                 listOf("ABC","\\","=","Space",".",",","↵")
             )
             offlineLanguage == "EN" -> listOf(
