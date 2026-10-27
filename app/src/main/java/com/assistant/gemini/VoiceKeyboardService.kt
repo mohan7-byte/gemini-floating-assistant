@@ -29,6 +29,7 @@ import android.widget.CheckBox
 import android.widget.RadioButton
 import android.widget.RadioGroup
 import android.widget.SeekBar
+import android.widget.ScrollView
 import androidx.core.content.FileProvider
 import org.json.JSONArray
 import org.json.JSONObject
@@ -47,6 +48,7 @@ class VoiceKeyboardService : InputMethodService() {
     private var dictateButton: TextView? = null
     private var keyboardContainer: LinearLayout? = null
     private var clipboardContainer: LinearLayout? = null
+    private var clipboardScroll: ScrollView? = null
     private var clipboardMode = false
 
     private data class ClipboardEntry(
@@ -126,6 +128,7 @@ class VoiceKeyboardService : InputMethodService() {
         offlinePanel = root.findViewById(R.id.offlinePanel)
         keyboardContainer = root.findViewById(R.id.keyboardContainer)
         clipboardContainer = root.findViewById(R.id.clipboardContainer)
+        clipboardScroll = root.findViewById(R.id.clipboardScroll)
         quickKeysContainer = root.findViewById(R.id.quickKeysContainer)
         languageButton = root.findViewById(R.id.btnLanguage)
         suggestionViews = listOf(root.findViewById(R.id.suggestion1), root.findViewById(R.id.suggestion2), root.findViewById(R.id.suggestion3))
@@ -237,6 +240,7 @@ class VoiceKeyboardService : InputMethodService() {
         offlinePanel?.visibility = if (show) View.VISIBLE else View.GONE
         keyboardContainer?.visibility = if (show) View.VISIBLE else View.GONE
         clipboardContainer?.visibility = View.GONE
+        clipboardScroll?.visibility = View.GONE
         inputRoot?.findViewById<View>(R.id.suggestionContainer)?.visibility =
             if (show && suggestionsEnabled() && !numberPage) View.VISIBLE else View.GONE
         val toggle = inputRoot?.findViewById<TextView>(R.id.btnOfflineKeyboard)
@@ -267,6 +271,7 @@ class VoiceKeyboardService : InputMethodService() {
         keyboardContainer?.visibility = View.GONE
         inputRoot?.findViewById<View>(R.id.suggestionContainer)?.visibility = View.GONE
         clipboardContainer?.visibility = View.VISIBLE
+        clipboardScroll?.visibility = View.VISIBLE
         renderClipboardItems()
         showStatus("Clipboard")
         applyKeyboardPalette(inputRoot)
