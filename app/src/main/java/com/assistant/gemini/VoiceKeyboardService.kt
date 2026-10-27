@@ -1625,7 +1625,7 @@ class VoiceKeyboardService : InputMethodService() {
         if (sensitiveInput && clipboardMode) showOfflineKeyboard(true)
         val shouldShowNumbers = inputClass == android.text.InputType.TYPE_CLASS_NUMBER ||
             inputClass == android.text.InputType.TYPE_CLASS_PHONE
-        if (numberPage != shouldShowNumbers) {
+        if (numberPage != shouldShowNumbers || numberOnlyPage != shouldShowNumbers) {
             numberPage = shouldShowNumbers
             numberOnlyPage = shouldShowNumbers
             if (isOfflineKeyboard && !clipboardMode && !settingsMode) renderOfflineKeys()
