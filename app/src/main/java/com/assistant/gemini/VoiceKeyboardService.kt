@@ -213,7 +213,17 @@ class VoiceKeyboardService : InputMethodService() {
         rememberClipboardItems()
         // The normal QWERTY keyboard is the default; Gemini Live remains one tap away in the toolbar.
         showOfflineKeyboard(true)
-        return root
+        return KeyboardSwipeDismissLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(root, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ))
+            onSwipeDown = {
+                stopDictation()
+                requestHideSelf(0)
+            }
+        }
     }
 
     private fun startDictation() {
@@ -1314,5 +1324,50 @@ class VoiceKeyboardService : InputMethodService() {
         spellCheckerSession?.close()
         spellCheckerSession = null
         super.onDestroy()
+    }
+}
+
+
+/**
+ * Intercepts a deliberate downward swipe anywhere on the keyboard, while cancelling the child
+ * touch first so long-press delete and spacebar gestures do not remain stuck.
+ */
+private class KeyboardSwipeDismissLayout(context: Context) : LinearLayout(context) {
+    var onSwipeDown: (() -> Unit)? = null
+    private var downX = 0f
+    private var downY = 0f
+    private var dismissing = false
+    private val swipeThreshold = (70 * resources.displayMetrics.density).toInt()
+
+    override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+        if (dismissing) {
+            if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) {
+                dismissing = false
+            }
+            return true
+        }
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                downX = event.rawX
+                downY = event.rawY
+            }
+            MotionEvent.ACTION_MOVE -> {
+                val deltaY = event.rawY - downY
+                val deltaX = abs(event.rawX - downX)
+                if (deltaY > swipeThreshold && deltaY > deltaX * 1.15f) {
+                    val cancel = MotionEvent.obtain(event).apply { action = MotionEvent.ACTION_CANCEL }
+                    super.dispatchTouchEvent(cancel)
+                    cancel.recycle()
+                    dismissing = true
+                    onSwipeDown?.invoke()
+                    return true
+                }
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                downX = 0f
+                downY = 0f
+            }
+        }
+        return super.dispatchTouchEvent(event)
     }
 }
