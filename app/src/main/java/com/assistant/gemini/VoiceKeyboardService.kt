@@ -236,6 +236,7 @@ class VoiceKeyboardService : InputMethodService() {
         }
         dictateButton?.setOnClickListener { if (recording) stopDictation() else startDictation() }
         root.findViewById<View>(R.id.btnMic).setOnClickListener { if (recording) stopDictation() else startDictation() }
+        root.findViewById<View>(R.id.btnMicCompact).setOnClickListener { if (recording) stopDictation() else startDictation() }
         root.findViewById<View>(R.id.btnHideKeyboard).setOnClickListener { stopDictation(); requestHideSelf(0) }
         root.findViewById<View>(R.id.btnOfflineKeyboard).setOnClickListener {
             if (clipboardMode) showOfflineKeyboard(true) else showOfflineKeyboard(!isOfflineKeyboard)
@@ -792,6 +793,7 @@ class VoiceKeyboardService : InputMethodService() {
         inputRoot?.findViewById<View>(R.id.imeHeader)?.visibility =
             if (toolbarExpanded || clipboardMode || settingsMode) View.VISIBLE else View.GONE
         inputRoot?.findViewById<TextView>(R.id.btnToggleToolbar)?.rotation = if (toolbarExpanded) 180f else 0f
+        inputRoot?.findViewById<View>(R.id.btnMicCompact)?.visibility = if (toolbarExpanded) View.GONE else View.VISIBLE
         inputRoot?.findViewById<TextView>(R.id.btnToggleToolbar)?.contentDescription =
             if (toolbarExpanded) "Collapse keyboard toolbar" else "Show keyboard toolbar"
         applyToolbarIcons()
@@ -1139,6 +1141,8 @@ class VoiceKeyboardService : InputMethodService() {
         setIcon(R.id.btnClipboard, R.drawable.ic_clipboard, "Open clipboard history")
         setIcon(R.id.btnMic, if (recording) R.drawable.ic_stop else R.drawable.ic_mic,
             if (recording) "Stop Gemini Live dictation" else "Start Gemini Live dictation", micTint)
+        setIcon(R.id.btnMicCompact, if (recording) R.drawable.ic_stop else R.drawable.ic_mic,
+            if (recording) "Stop Gemini Live dictation" else "Start Gemini Live dictation", micTint)
         setIcon(R.id.btnHideKeyboard, R.drawable.ic_chevron_down, "Hide keyboard")
         setIcon(R.id.btnToggleToolbar, R.drawable.ic_chevron_down,
             if (toolbarExpanded) "Collapse keyboard toolbar" else "Show keyboard toolbar")
@@ -1147,15 +1151,21 @@ class VoiceKeyboardService : InputMethodService() {
     }
 
     private fun refreshMicIndicator() {
-        val mic = inputRoot?.findViewById<TextView>(R.id.btnMic) ?: return
+        val micViews = listOfNotNull(
+            inputRoot?.findViewById<TextView>(R.id.btnMic),
+            inputRoot?.findViewById<TextView>(R.id.btnMicCompact)
+        )
         if (recording && geminiConnected) {
-            mic.background = GradientDrawable().apply {
-                shape = GradientDrawable.OVAL
-                setColor(if (darkKeyboard()) 0xFF164E42.toInt() else 0xFFD7F4E3.toInt())
+            micViews.forEach { mic ->
+                mic.background = GradientDrawable().apply {
+                    shape = GradientDrawable.OVAL
+                    setColor(if (darkKeyboard()) 0xFF164E42.toInt() else 0xFFD7F4E3.toInt())
+                }
             }
-            if (micPulseAnimator?.isRunning != true) {
+            val target = micViews.firstOrNull { it.visibility == View.VISIBLE }
+            if (micPulseAnimator?.isRunning != true && target != null) {
                 micPulseAnimator?.cancel()
-                micPulseAnimator = ObjectAnimator.ofFloat(mic, View.ALPHA, 0.55f, 1f).apply {
+                micPulseAnimator = ObjectAnimator.ofFloat(target, View.ALPHA, 0.55f, 1f).apply {
                     duration = 720L
                     repeatCount = ValueAnimator.INFINITE
                     repeatMode = ValueAnimator.REVERSE
@@ -1164,9 +1174,12 @@ class VoiceKeyboardService : InputMethodService() {
             }
         } else {
             stopMicPulse()
-            mic.background = GradientDrawable().apply {
-                setColor(if (darkKeyboard()) 0xFF202124.toInt() else 0xFFEFF1F8.toInt())
-                cornerRadius = dp(18).toFloat()
+            micViews.forEach { mic ->
+                mic.alpha = 1f
+                mic.background = GradientDrawable().apply {
+                    setColor(if (darkKeyboard()) 0xFF202124.toInt() else 0xFFEFF1F8.toInt())
+                    cornerRadius = dp(18).toFloat()
+                }
             }
         }
     }
@@ -1175,6 +1188,7 @@ class VoiceKeyboardService : InputMethodService() {
         micPulseAnimator?.cancel()
         micPulseAnimator = null
         inputRoot?.findViewById<View>(R.id.btnMic)?.alpha = 1f
+        inputRoot?.findViewById<View>(R.id.btnMicCompact)?.alpha = 1f
     }
 
     private fun loadClipboardEntries(): MutableList<ClipboardEntry> {
