@@ -803,115 +803,38 @@ class VoiceKeyboardService : InputMethodService() {
 
     private fun applyKeyboardPalette(view: View?) {
         val dark = darkKeyboard()
-        val backgroundColor = if (dark) 0xFF191B22.toInt() else 0xFFE9ECF7.toInt()
-        val primaryText = if (dark) 0xFFF5F6F8.toInt() else 0xFF20232B.toInt()
-        val secondaryText = if (dark) 0xFFB4BAC6.toInt() else 0xFF555C6A.toInt()
+        val backgroundColor = if (dark) 0xFF202124.toInt() else 0xFFEFF1F8.toInt()
+        val primaryText = if (dark) 0xFFF1F3F4.toInt() else 0xFF202124.toInt()
+        val secondaryText = if (dark) 0xFFB8BBC2.toInt() else 0xFF555963.toInt()
         view?.setBackgroundColor(backgroundColor)
+        statusView?.visibility = View.GONE
         statusView?.setTextColor(secondaryText)
-        languageButton?.setTextColor(if (dark) 0xFFA7F3D0.toInt() else 0xFF425A8A.toInt())
+        languageButton?.setTextColor(primaryText)
         suggestionViews.forEach { it.setTextColor(primaryText) }
-        listOf(R.id.btnLanguage, R.id.btnOfflineKeyboard, R.id.btnClipboard, R.id.btnSettings, R.id.btnMic, R.id.btnHideKeyboard)
-            .forEach { id ->
-                inputRoot?.findViewById<TextView>(id)?.apply {
-                    setTextColor(primaryText)
-                    background = GradientDrawable().apply {
-                        setColor(if (dark) 0xFF292D36.toInt() else 0xFFFFFFFF.toInt())
-                        cornerRadius = dp(10).toFloat()
-                    }
+
+        // Toolbar buttons share the keyboard surface: no separate dark slab or chunky tiles.
+        listOf(
+            R.id.btnLanguage, R.id.btnSettings, R.id.btnOfflineKeyboard,
+            R.id.btnTheme, R.id.btnClipboard, R.id.btnMic, R.id.btnHideKeyboard
+        ).forEach { id ->
+            inputRoot?.findViewById<TextView>(id)?.apply {
+                setTextColor(primaryText)
+                background = GradientDrawable().apply {
+                    setColor(backgroundColor)
+                    cornerRadius = dp(12).toFloat()
                 }
+                elevation = 0f
+                isClickable = true
+                isFocusable = true
             }
+        }
         dictateButton?.apply {
-            setTextColor(if (dark) 0xFFA7F3D0.toInt() else 0xFF304E75.toInt())
+            setTextColor(if (dark) 0xFFA7F3D0.toInt() else 0xFF263F69.toInt())
             background = GradientDrawable().apply {
                 setColor(if (dark) 0xFF164E42.toInt() else 0xFFDCE6FF.toInt())
                 cornerRadius = dp(12).toFloat()
             }
         }
-    }
-
-    private fun showKeyboardSettings() {
-        val prefs = keyboardPrefs
-        val content = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(20), dp(8), dp(20), dp(4))
-        }
-        val themeTitle = TextView(this).apply {
-            text = "Appearance"
-            textSize = 14f
-            setTypeface(typeface, android.graphics.Typeface.BOLD)
-            setTextColor(if (darkKeyboard()) 0xFFF5F6F8.toInt() else 0xFF20232B.toInt())
-        }
-        content.addView(themeTitle)
-        val themeGroup = RadioGroup(this).apply { orientation = LinearLayout.HORIZONTAL }
-        val selectedTheme = prefs.getString("keyboard_theme", "system") ?: "system"
-        listOf("system" to "System", "light" to "Light", "dark" to "Dark").forEach { (value, label) ->
-            val radio = RadioButton(this).apply {
-                id = View.generateViewId()
-                tag = value
-                text = label
-                textSize = 13f
-                setTextColor(if (darkKeyboard()) 0xFFF5F6F8.toInt() else 0xFF20232B.toInt())
-                isChecked = value == selectedTheme
-                layoutParams = RadioGroup.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-            }
-            themeGroup.addView(radio)
-        }
-        content.addView(themeGroup)
-        val numberRow = CheckBox(this).apply {
-            text = "Show number row"
-            isChecked = numberRowEnabled()
-            setTextColor(if (darkKeyboard()) 0xFFF5F6F8.toInt() else 0xFF20232B.toInt())
-        }
-        content.addView(numberRow)
-        val suggestions = CheckBox(this).apply {
-            text = "Word suggestions (lightweight system spell checker)"
-            isChecked = suggestionsEnabled()
-            setTextColor(if (darkKeyboard()) 0xFFF5F6F8.toInt() else 0xFF20232B.toInt())
-        }
-        content.addView(suggestions)
-        val heightLabel = TextView(this).apply {
-            text = "Keyboard height: ${prefs.getInt("keyboard_height_percent", 100).coerceIn(80, 125)}%"
-            textSize = 14f
-            setTextColor(if (darkKeyboard()) 0xFFF5F6F8.toInt() else 0xFF20232B.toInt())
-            setPadding(0, dp(10), 0, 0)
-        }
-        content.addView(heightLabel)
-        val heightSeek = SeekBar(this).apply {
-            max = 45
-            progress = prefs.getInt("keyboard_height_percent", 100).coerceIn(80, 125) - 80
-        }
-        heightSeek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                heightLabel.text = "Keyboard height: ${progress + 80}%"
-            }
-            override fun onStartTrackingTouch(seekBar: SeekBar?) = Unit
-            override fun onStopTrackingTouch(seekBar: SeekBar?) = Unit
-        })
-        content.addView(heightSeek)
-        val dialog = AlertDialog.Builder(this)
-            .setTitle("Keyboard settings")
-            .setView(content)
-            .setNegativeButton("Cancel", null)
-            .setPositiveButton("Save") { _, _ ->
-                val theme = themeGroup.findViewById<RadioButton>(themeGroup.checkedRadioButtonId)?.tag as? String ?: "system"
-                prefs.edit()
-                    .putString("keyboard_theme", theme)
-                    .putBoolean("keyboard_number_row", numberRow.isChecked)
-                    .putBoolean("keyboard_suggestions_enabled", suggestions.isChecked)
-                    .putInt("keyboard_height_percent", heightSeek.progress + 80)
-                    .apply()
-                if (!suggestions.isChecked) {
-                    spellCheckerSession?.close()
-                    spellCheckerSession = null
-                    displaySuggestions(emptyList())
-                } else openSpellChecker()
-                applyKeyboardPalette(inputRoot)
-                renderQuickKeys()
-                renderOfflineKeys()
-                if (clipboardMode) renderClipboardItems()
-            }
-            .create()
-        dialog.show()
     }
 
     private fun loadClipboardEntries(): MutableList<ClipboardEntry> {
