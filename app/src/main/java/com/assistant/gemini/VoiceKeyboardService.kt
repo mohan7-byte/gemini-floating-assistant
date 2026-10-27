@@ -317,10 +317,10 @@ class VoiceKeyboardService : InputMethodService() {
         container.removeAllViews()
         val baseRows: List<List<String>> = when {
             numberPage -> listOf(
-                listOf("1","2","3"),
-                listOf("4","5","6"),
-                listOf("7","8","9"),
-                listOf("ABC","0","⌫","↵")
+                listOf("1","2","3","4","5","6","7","8","9","0"),
+                listOf("@","#","$","%","&","-","+","(",")"),
+                listOf("*","\\"","'",";",":","!","?","⌫"),
+                listOf("ABC","\\","=","Space",".",",","↵")
             )
             offlineLanguage == "EN" -> listOf(
                 listOf("q","w","e","r","t","y","u","i","o","p"),
@@ -873,7 +873,13 @@ class VoiceKeyboardService : InputMethodService() {
         TextView(this).apply {
             text = label
             gravity = Gravity.CENTER
-            textSize = when { label.length > 5 -> 11f; label.length > 2 -> 13f; else -> 17f }
+            textSize = when {
+                label.length > 5 -> 11f
+                label.length > 2 -> 13f
+                isOfflineKeyboard && label.length == 1 -> 23f
+                isOfflineKeyboard -> 19f
+                else -> 17f
+            }
             val dark = darkKeyboard()
             val fill = when {
                 primary && dark -> 0xFFBDEDDD.toInt()
