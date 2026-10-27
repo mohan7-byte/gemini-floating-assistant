@@ -276,6 +276,10 @@ class VoiceKeyboardService : InputMethodService() {
     }
 
     private fun showClipboardPanel() {
+        if (sensitiveInput) {
+            showStatus("Clipboard is unavailable in secure fields")
+            return
+        }
         rememberClipboardItems()
         stopDictation()
         isOfflineKeyboard = true
@@ -1030,6 +1034,7 @@ class VoiceKeyboardService : InputMethodService() {
             (inputClass == android.text.InputType.TYPE_CLASS_NUMBER &&
                 variation == android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD) ||
             ((info?.imeOptions ?: 0) and android.view.inputmethod.EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING) != 0
+        if (sensitiveInput && clipboardMode) showOfflineKeyboard(true)
         val shouldShowNumbers = inputClass == android.text.InputType.TYPE_CLASS_NUMBER ||
             inputClass == android.text.InputType.TYPE_CLASS_PHONE
         if (numberPage != shouldShowNumbers) {
