@@ -587,7 +587,7 @@ class VoiceKeyboardService : InputMethodService() {
             setTextColor(if (darkKeyboard()) 0xFFF5F6F8.toInt() else 0xFF20232B.toInt())
         }
         content.addView(themeTitle)
-        val themeGroup = RadioGroup(this).apply { orientation = RadioGroup.HORIZONTAL }
+        val themeGroup = RadioGroup(this).apply { orientation = LinearLayout.HORIZONTAL }
         val selectedTheme = prefs.getString("keyboard_theme", "system") ?: "system"
         listOf("system" to "System", "light" to "Light", "dark" to "Dark").forEach { (value, label) ->
             val radio = RadioButton(this).apply {
@@ -1036,6 +1036,8 @@ class VoiceKeyboardService : InputMethodService() {
             numberPage = shouldShowNumbers
             if (isOfflineKeyboard && !clipboardMode) renderOfflineKeys()
         }
+        inputRoot?.findViewById<View>(R.id.suggestionContainer)?.visibility =
+            if (isOfflineKeyboard && suggestionsEnabled() && !numberPage && !sensitiveInput && !clipboardMode) View.VISIBLE else View.GONE
         if (!sensitiveInput) rememberClipboardItems()
         if (isOfflineKeyboard) {
             openSpellChecker()
