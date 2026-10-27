@@ -70,6 +70,7 @@ class VoiceKeyboardService : InputMethodService() {
     private var toolbarExpanded = false
     private var numberOnlyPage = false
     @Volatile private var geminiConnected = false
+    @Volatile private var liveGeneration = 0
     private var micPulseAnimator: ObjectAnimator? = null
     private var clipboardManager: ClipboardManager? = null
     private var clipboardListenerRegistered = false
@@ -287,6 +288,7 @@ class VoiceKeyboardService : InputMethodService() {
         }
         if (currentInputConnection == null) { showStatus("Tap a text field first."); return }
         intentionalStop = false
+        val sessionGeneration = ++liveGeneration
         recording = true
         geminiConnected = false
         lastTranscriptChunk = ""
@@ -295,19 +297,19 @@ class VoiceKeyboardService : InputMethodService() {
         showStatus("Connecting to live transcription…")
         val session = GeminiLiveSession(this, key, "gemini-3.5-transcribe-live",
             object : GeminiLiveSession.Callbacks {
-                override fun onStatus(message: String) { if (recording) showStatus(message) }
+                override fun onStatus(message: String) { if (recording && sessionGeneration == liveGeneration) showStatus(message) }
                 override fun onReady() {
             mainHandler.post {
-                if (!recording) return@post
+                if (!recording || sessionGeneration != liveGeneration) return@post
                 geminiConnected = true
                 applyToolbarIcons()
                 showStatus("Gemini connected · Listening")
             }
         }
                 override fun onTranscript(message: String, isAssistant: Boolean, isInterim: Boolean) {
-                    if (isAssistant || !recording || message.isBlank()) return
+                    if (isAssistant || !recording || sessionGeneration != liveGeneration || message.isBlank()) return
                     mainHandler.post {
-                        if (!recording) return@post
+                        if (!recording || sessionGeneration != liveGeneration) return@post
                         val ic = currentInputConnection ?: return@post
                         val normalized = message.trim()
                         if (normalized.isBlank()) return@post
@@ -326,6 +328,7 @@ class VoiceKeyboardService : InputMethodService() {
                 }
                 override fun onEnded(message: String) {
                     mainHandler.post {
+                        if (sessionGeneration != liveGeneration) return@post
                         val userStopped = intentionalStop
                         currentInputConnection?.finishComposingText()
                         recording = false
@@ -352,6 +355,7 @@ class VoiceKeyboardService : InputMethodService() {
     private fun stopDictation() {
         if (!recording && liveSession == null) return
         intentionalStop = true
+        liveGeneration += 1
         recording = false
         geminiConnected = false
         stopMicPulse()
