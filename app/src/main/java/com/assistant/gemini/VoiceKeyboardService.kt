@@ -1546,7 +1546,10 @@ class VoiceKeyboardService : InputMethodService() {
             isClickable = true; isFocusable = true
             setOnTouchListener { view, event ->
                 when (event.actionMasked) {
-                    MotionEvent.ACTION_DOWN -> view.animate().cancel().scaleX(0.965f).scaleY(0.965f).setDuration(45L).start()
+                    MotionEvent.ACTION_DOWN -> {
+                        view.animate().cancel()
+                        view.animate().scaleX(0.965f).scaleY(0.965f).setDuration(45L).start()
+                    }
                     MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> view.animate().scaleX(1f).scaleY(1f).setDuration(90L).start()
                 }
                 false
