@@ -393,6 +393,27 @@ class VoiceKeyboardService : InputMethodService() {
                         }
                     }
                 }
+                if (!numberPage && offlineLanguage == "EN" && key.length == 1 && key[0].isLetter()) {
+                    alternateSymbol(key)?.let { alternate ->
+                        val decorated = android.text.SpannableString("$label$alternate")
+                        decorated.setSpan(
+                            android.text.style.RelativeSizeSpan(0.55f),
+                            label.length, label.length + alternate.length,
+                            android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                        )
+                        decorated.setSpan(
+                            android.text.style.SuperscriptSpan(),
+                            label.length, label.length + alternate.length,
+                            android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                        )
+                        button.text = decorated
+                        button.setOnLongClickListener {
+                            commit(alternate)
+                            if (shifted) { shifted = false; renderOfflineKeys() }
+                            true
+                        }
+                    }
+                }
                 if (key == "⌫") installDeleteGesture(button)
                 else if (key == "Space") installSpaceCursorGesture(button)
                 row.addView(button)
@@ -811,6 +832,36 @@ class VoiceKeyboardService : InputMethodService() {
             showStatus("Pasted image")
             showOfflineKeyboard(true)
         } else showStatus("This text field cannot accept images")
+    }
+
+    private fun alternateSymbol(key: String): String? = when (key.lowercase(Locale.ROOT)) {
+        "q" -> "%"
+        "w" -> "\\"
+        "e" -> "|"
+        "r" -> "="
+        "t" -> "["
+        "y" -> "]"
+        "u" -> "<"
+        "i" -> ">"
+        "o" -> "{"
+        "p" -> "}"
+        "a" -> "@"
+        "s" -> "#"
+        "d" -> "$"
+        "f" -> "-"
+        "g" -> "&"
+        "h" -> "_"
+        "j" -> "+"
+        "k" -> "("
+        "l" -> ")"
+        "z" -> "*"
+        "x" -> "`"
+        "c" -> "'"
+        "v" -> ":"
+        "b" -> ";"
+        "n" -> "!"
+        "m" -> "?"
+        else -> null
     }
 
     private fun installSpaceCursorGesture(view: View) {
