@@ -58,7 +58,7 @@ class VoiceKeyboardService : InputMethodService() {
     private var settingsNumberRow: CheckBox? = null
     private var settingsSuggestions: CheckBox? = null
     private var settingsHeightSeek: SeekBar? = null
-    private var settingsCustomKeys: EditText? = null
+    private var settingsCustomKeyChecks: LinkedHashMap<String, CheckBox> = linkedMapOf()
     private var settingsHeightLabel: TextView? = null
     private var clipboardMode = false
     private var sensitiveInput = true
@@ -446,34 +446,46 @@ class VoiceKeyboardService : InputMethodService() {
         settingsHeightSeek = heightSeek
         container.addView(heightSeek)
 
-        container.addView(label("Custom quick keys", true))
-        container.addView(label("Add up to 6 shortcuts, separated by commas.", false))
-        val customKeys = EditText(this).apply {
-            setText(keyboardPrefs.getString("voice_custom_keys", "").orEmpty())
-            hint = "@, #, ₹"
-            textSize = 14f
-            setSingleLine(true)
-            setTextColor(foreground)
-            setHintTextColor(secondary)
-            setPadding(dp(10), dp(8), dp(10), dp(8))
-            background = GradientDrawable().apply {
-                setColor(surface)
-                cornerRadius = dp(9).toFloat()
-                setStroke(dp(1), if (dark) 0xFF454D58.toInt() else 0xFFE0E4ED.toInt())
+        container.addView(label("Quick key shortcuts", true))
+        container.addView(label("Tap up to 6 symbols to add them beside Space and Enter.", false))
+        settingsCustomKeyChecks = linkedMapOf()
+        val existing = keyboardPrefs.getString("voice_custom_keys", "").orEmpty()
+            .split(",").map { it.trim() }.filter { it.isNotEmpty() }
+        val options = (listOf("@", "#", "₹", "&", "_", "+", "-", "=", ":", ";", "?", "!", "/", "\\", "%", "*") + existing)
+            .distinct().take(22)
+        options.chunked(6).forEach { optionRow ->
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(38))
             }
+            optionRow.forEach { symbol ->
+                val check = CheckBox(this).apply {
+                    text = symbol
+                    textSize = 14f
+                    setTextColor(foreground)
+                    isChecked = symbol in existing
+                    buttonTintList = ColorStateList.valueOf(if (dark) 0xFFA7F3D0.toInt() else 0xFF536EA3.toInt())
+                    layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                    setOnCheckedChangeListener { _, checked ->
+                        if (checked && settingsCustomKeyChecks.values.count { it.isChecked } > 6) {
+                            isChecked = false
+                            showStatus("You can select up to 6 quick keys")
+                        }
+                    }
+                }
+                settingsCustomKeyChecks[symbol] = check
+                row.addView(check)
+            }
+            container.addView(row)
         }
-        settingsCustomKeys = customKeys
-        container.addView(customKeys, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, dp(42)
-        ))
     }
 
     private fun saveKeyboardSettings() {
         val theme = settingsThemeGroup
             ?.findViewById<RadioButton>(settingsThemeGroup?.checkedRadioButtonId ?: View.NO_ID)
             ?.tag as? String ?: "system"
-        val customKeys = settingsCustomKeys?.text?.toString().orEmpty()
-            .split(",").map { it.trim() }.filter { it.isNotEmpty() }.take(6)
+        val customKeys = settingsCustomKeyChecks.filterValues { it.isChecked }.keys.take(6)
         keyboardPrefs.edit()
             .putString("keyboard_theme", theme)
             .putBoolean("keyboard_number_row", settingsNumberRow?.isChecked ?: true)
