@@ -1,12 +1,12 @@
 package com.assistant.gemini
 
-import android.app.AlertDialog
 import android.content.Context
 import android.content.ClipboardManager
 import android.content.ClipDescription
 import android.net.Uri
 import android.content.pm.PackageManager
 import android.graphics.Color
+import android.content.res.ColorStateList
 import android.graphics.drawable.GradientDrawable
 import android.inputmethodservice.InputMethodService
 import android.os.Handler
@@ -49,6 +49,16 @@ class VoiceKeyboardService : InputMethodService() {
     private var keyboardContainer: LinearLayout? = null
     private var clipboardContainer: LinearLayout? = null
     private var clipboardScroll: ScrollView? = null
+    private var settingsScroll: ScrollView? = null
+    private var settingsContainer: LinearLayout? = null
+    private var settingsActions: LinearLayout? = null
+    private var settingsMode = false
+    private var settingsThemeGroup: RadioGroup? = null
+    private var settingsNumberRow: CheckBox? = null
+    private var settingsSuggestions: CheckBox? = null
+    private var settingsHeightSeek: SeekBar? = null
+    private var settingsCustomKeys: EditText? = null
+    private var settingsHeightLabel: TextView? = null
     private var clipboardMode = false
     private var sensitiveInput = true
 
@@ -130,6 +140,9 @@ class VoiceKeyboardService : InputMethodService() {
         keyboardContainer = root.findViewById(R.id.keyboardContainer)
         clipboardContainer = root.findViewById(R.id.clipboardContainer)
         clipboardScroll = root.findViewById(R.id.clipboardScroll)
+        settingsScroll = root.findViewById(R.id.settingsScroll)
+        settingsContainer = root.findViewById(R.id.settingsContainer)
+        settingsActions = root.findViewById(R.id.settingsActions)
         quickKeysContainer = root.findViewById(R.id.quickKeysContainer)
         languageButton = root.findViewById(R.id.btnLanguage)
         suggestionViews = listOf(root.findViewById(R.id.suggestion1), root.findViewById(R.id.suggestion2), root.findViewById(R.id.suggestion3))
@@ -148,9 +161,12 @@ class VoiceKeyboardService : InputMethodService() {
             if (clipboardMode) showOfflineKeyboard(true) else showClipboardPanel()
         }
         root.findViewById<View>(R.id.btnSettings).setOnClickListener { showKeyboardSettings() }
+        root.findViewById<View>(R.id.btnTheme).setOnClickListener { cycleKeyboardTheme() }
+        root.findViewById<View>(R.id.btnSaveKeyboardSettings).setOnClickListener { saveKeyboardSettings() }
+        root.findViewById<View>(R.id.btnCancelKeyboardSettings).setOnClickListener { showOfflineKeyboard(true) }
         root.findViewById<View>(R.id.btnBackToVoice).setOnClickListener { showOfflineKeyboard(false) }
         languageButton?.setOnClickListener { switchLanguage() }
-        root.findViewById<View>(R.id.btnCustomizeKeys).setOnClickListener { customizeKeys() }
+        root.findViewById<View>(R.id.btnCustomizeKeys).setOnClickListener { showKeyboardSettings() }
         // Swipe down on the header/status area hides the IME; it never steals ordinary key taps.
         listOf(root.findViewById<View>(R.id.imeHeader), root.findViewById<View>(R.id.imeStatus))
             .forEach { installHideGesture(it) }
