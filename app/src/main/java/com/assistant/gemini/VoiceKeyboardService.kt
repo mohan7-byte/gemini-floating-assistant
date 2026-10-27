@@ -72,6 +72,7 @@ class VoiceKeyboardService : InputMethodService() {
     @Volatile private var geminiConnected = false
     @Volatile private var liveGeneration = 0
     private var micPulseAnimator: ObjectAnimator? = null
+    private var micPulseTarget: View? = null
     private var clipboardManager: ClipboardManager? = null
     private var clipboardListenerRegistered = false
     private var learnedEnglishWordsCache: LinkedHashMap<String, Int>? = null
@@ -1162,9 +1163,12 @@ class VoiceKeyboardService : InputMethodService() {
                     setColor(if (darkKeyboard()) 0xFF164E42.toInt() else 0xFFD7F4E3.toInt())
                 }
             }
-            val target = micViews.firstOrNull { it.visibility == View.VISIBLE }
-            if (micPulseAnimator?.isRunning != true && target != null) {
-                micPulseAnimator?.cancel()
+            val target = inputRoot?.findViewById<View>(
+                if (toolbarExpanded) R.id.btnMic else R.id.btnMicCompact
+            )
+            if (target != null && (micPulseTarget !== target || micPulseAnimator?.isRunning != true)) {
+                stopMicPulse()
+                micPulseTarget = target
                 micPulseAnimator = ObjectAnimator.ofFloat(target, View.ALPHA, 0.55f, 1f).apply {
                     duration = 720L
                     repeatCount = ValueAnimator.INFINITE
@@ -1187,6 +1191,7 @@ class VoiceKeyboardService : InputMethodService() {
     private fun stopMicPulse() {
         micPulseAnimator?.cancel()
         micPulseAnimator = null
+        micPulseTarget = null
         inputRoot?.findViewById<View>(R.id.btnMic)?.alpha = 1f
         inputRoot?.findViewById<View>(R.id.btnMicCompact)?.alpha = 1f
     }
