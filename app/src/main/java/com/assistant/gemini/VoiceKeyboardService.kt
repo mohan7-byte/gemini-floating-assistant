@@ -355,8 +355,8 @@ class VoiceKeyboardService : InputMethodService() {
                     bottomMargin = dp((3 * keyboardScale()).toInt())
                     val sideInset = when {
                         numberPage -> dp(28)
-                        rowIndex == 1 && offlineLanguage == "EN" -> dp(9)
-                        rowIndex == 2 && offlineLanguage == "EN" -> dp(2)
+                        rowKeys.firstOrNull() == "a" && offlineLanguage == "EN" -> dp(9)
+                        rowKeys.firstOrNull() == "⇧" && offlineLanguage == "EN" -> dp(2)
                         else -> 0
                     }
                     marginStart = sideInset
@@ -669,7 +669,8 @@ class VoiceKeyboardService : InputMethodService() {
             val text = runCatching { item.text?.toString() }.getOrNull()?.takeIf { it.isNotBlank() }
             if (text != null) {
                 val id = "text:" + text.hashCode().toString()
-                added.add(ClipboardEntry(id = id, text = text.take(12000)))
+                val previous = entries.firstOrNull { it.id == id }
+                added.add(ClipboardEntry(id = id, text = text.take(12000), pinned = previous?.pinned ?: false))
                 continue
             }
             val source = item.uri ?: continue
