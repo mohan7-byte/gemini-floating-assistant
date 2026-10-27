@@ -2,6 +2,9 @@ package com.assistant.gemini
 
 import android.app.AlertDialog
 import android.content.Context
+import android.content.ClipboardManager
+import android.content.ClipDescription
+import android.net.Uri
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
@@ -14,6 +17,7 @@ import android.view.View
 import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.view.inputmethod.InputConnection
+import android.view.inputmethod.InputContentInfo
 import android.view.textservice.SentenceSuggestionsInfo
 import android.view.textservice.SuggestionsInfo
 import android.view.textservice.SpellCheckerSession
@@ -21,6 +25,15 @@ import android.view.textservice.TextInfo
 import android.view.textservice.TextServicesManager
 import java.util.Locale
 import android.widget.EditText
+import android.widget.CheckBox
+import android.widget.RadioButton
+import android.widget.RadioGroup
+import android.widget.SeekBar
+import androidx.core.content.FileProvider
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.File
+import java.io.FileOutputStream
 import android.widget.LinearLayout
 import android.widget.TextView
 import kotlin.math.abs
@@ -33,6 +46,30 @@ class VoiceKeyboardService : InputMethodService() {
     private var statusView: TextView? = null
     private var dictateButton: TextView? = null
     private var keyboardContainer: LinearLayout? = null
+    private var clipboardContainer: LinearLayout? = null
+    private var clipboardMode = false
+
+    private data class ClipboardEntry(
+        val id: String,
+        val text: String? = null,
+        val uri: String? = null,
+        val mimeType: String? = null,
+        val pinned: Boolean = false,
+        val sourceUri: String? = null
+    )
+
+    private val keyboardPrefs get() = SecurePrefs.get(this)
+    private fun suggestionsEnabled() = keyboardPrefs.getBoolean("keyboard_suggestions_enabled", true)
+    private fun numberRowEnabled() = keyboardPrefs.getBoolean("keyboard_number_row", true)
+    private fun keyboardScale() = keyboardPrefs.getInt("keyboard_height_percent", 100).coerceIn(80, 125) / 100f
+    private fun darkKeyboard(): Boolean {
+        return when (keyboardPrefs.getString("keyboard_theme", "system")) {
+            "dark" -> true
+            "light" -> false
+            else -> (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
+                android.content.res.Configuration.UI_MODE_NIGHT_YES
+        }
+    }
     private var quickKeysContainer: LinearLayout? = null
     private var voicePanel: View? = null
     private var offlinePanel: View? = null
@@ -88,6 +125,7 @@ class VoiceKeyboardService : InputMethodService() {
         voicePanel = root.findViewById(R.id.voicePanel)
         offlinePanel = root.findViewById(R.id.offlinePanel)
         keyboardContainer = root.findViewById(R.id.keyboardContainer)
+        clipboardContainer = root.findViewById(R.id.clipboardContainer)
         quickKeysContainer = root.findViewById(R.id.quickKeysContainer)
         languageButton = root.findViewById(R.id.btnLanguage)
         suggestionViews = listOf(root.findViewById(R.id.suggestion1), root.findViewById(R.id.suggestion2), root.findViewById(R.id.suggestion3))
@@ -98,7 +136,13 @@ class VoiceKeyboardService : InputMethodService() {
         }
         dictateButton?.setOnClickListener { if (recording) stopDictation() else startDictation() }
         root.findViewById<View>(R.id.btnHideKeyboard).setOnClickListener { stopDictation(); requestHideSelf(0) }
-        root.findViewById<View>(R.id.btnOfflineKeyboard).setOnClickListener { showOfflineKeyboard(!isOfflineKeyboard) }
+        root.findViewById<View>(R.id.btnOfflineKeyboard).setOnClickListener {
+            if (clipboardMode) showOfflineKeyboard(true) else showOfflineKeyboard(!isOfflineKeyboard)
+        }
+        root.findViewById<View>(R.id.btnClipboard).setOnClickListener {
+            if (clipboardMode) showOfflineKeyboard(true) else showClipboardPanel()
+        }
+        root.findViewById<View>(R.id.btnSettings).setOnClickListener { showKeyboardSettings() }
         root.findViewById<View>(R.id.btnBackToVoice).setOnClickListener { showOfflineKeyboard(false) }
         languageButton?.setOnClickListener { switchLanguage() }
         root.findViewById<View>(R.id.btnCustomizeKeys).setOnClickListener { customizeKeys() }
@@ -107,6 +151,8 @@ class VoiceKeyboardService : InputMethodService() {
             .forEach { installHideGesture(it) }
         renderQuickKeys()
         renderOfflineKeys()
+        applyKeyboardPalette(root)
+        rememberClipboardItems()
         showOfflineKeyboard(false)
         return root
     }
@@ -186,22 +232,44 @@ class VoiceKeyboardService : InputMethodService() {
 
     private fun showOfflineKeyboard(show: Boolean) {
         isOfflineKeyboard = show
+        clipboardMode = false
         voicePanel?.visibility = if (show) View.GONE else View.VISIBLE
         offlinePanel?.visibility = if (show) View.VISIBLE else View.GONE
+        keyboardContainer?.visibility = if (show) View.VISIBLE else View.GONE
+        clipboardContainer?.visibility = View.GONE
+        inputRoot?.findViewById<View>(R.id.suggestionContainer)?.visibility =
+            if (show && suggestionsEnabled() && !numberPage) View.VISIBLE else View.GONE
         val toggle = inputRoot?.findViewById<TextView>(R.id.btnOfflineKeyboard)
         toggle?.text = if (show) "🎙" else "⌨"
-        toggle?.contentDescription = if (show) "Switch to voice typing" else "Switch to offline keyboard"
+        toggle?.contentDescription = if (show) "Switch to Gemini Live voice typing" else "Switch to keyboard"
         languageButton?.text = offlineLanguage
         if (show) {
             stopDictation()
             openSpellChecker()
             showStatus("$offlineLanguage keyboard")
+            renderOfflineKeys()
             refreshSuggestions()
         } else {
             activeSuggestionWord = ""
             displaySuggestions(emptyList())
-            showStatus(if (recording) "Listening · live text" else "Voice typing ready")
+            showStatus(if (recording) "Listening · live text" else "Gemini Live voice typing")
         }
+        applyKeyboardPalette(inputRoot)
+    }
+
+    private fun showClipboardPanel() {
+        rememberClipboardItems()
+        stopDictation()
+        isOfflineKeyboard = true
+        clipboardMode = true
+        voicePanel?.visibility = View.GONE
+        offlinePanel?.visibility = View.VISIBLE
+        keyboardContainer?.visibility = View.GONE
+        inputRoot?.findViewById<View>(R.id.suggestionContainer)?.visibility = View.GONE
+        clipboardContainer?.visibility = View.VISIBLE
+        renderClipboardItems()
+        showStatus("Clipboard")
+        applyKeyboardPalette(inputRoot)
     }
 
     private fun switchLanguage() {
@@ -242,7 +310,7 @@ class VoiceKeyboardService : InputMethodService() {
     private fun renderOfflineKeys() {
         val container = keyboardContainer ?: return
         container.removeAllViews()
-        val rows: List<List<String>> = when {
+        val baseRows: List<List<String>> = when {
             numberPage -> listOf(
                 listOf("1","2","3"),
                 listOf("4","5","6"),
@@ -270,15 +338,16 @@ class VoiceKeyboardService : InputMethodService() {
                 listOf("?123","।","🌐","Space","॰","↵")
             )
         }
+        val rows = if (numberRowEnabled() && !numberPage) listOf(listOf("1","2","3","4","5","6","7","8","9","0")) + baseRows else baseRows
         rows.forEachIndexed { rowIndex, rowKeys ->
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER
                 layoutParams = LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
-                    dp(if (numberPage) 43 else if (offlineLanguage == "HI") 37 else 39)
+                    dp(((if (numberPage) 43 else if (offlineLanguage == "HI") 37 else 39) * keyboardScale()).toInt())
                 ).apply {
-                    bottomMargin = dp(3)
+                    bottomMargin = dp((3 * keyboardScale()).toInt())
                     val sideInset = when {
                         numberPage -> dp(28)
                         rowIndex == 1 && offlineLanguage == "EN" -> dp(9)
@@ -319,17 +388,23 @@ class VoiceKeyboardService : InputMethodService() {
                         }
                     }
                 }
-                if (key == "⌫") installDeleteGesture(button) else installHideGesture(button)
+                if (key == "⌫") installDeleteGesture(button)
+                else if (key == "Space") installSpaceCursorGesture(button)
                 row.addView(button)
             }
             container.addView(row)
         }
         // Keep the numeric page truly numeric: hide the word suggestion strip.
         inputRoot?.findViewById<View>(R.id.suggestionContainer)?.visibility =
-            if (numberPage) View.GONE else View.VISIBLE
+            if (numberPage || !suggestionsEnabled() || clipboardMode) View.GONE else View.VISIBLE
     }
 
     private fun openSpellChecker() {
+        if (!suggestionsEnabled()) {
+            spellCheckerSession?.close()
+            spellCheckerSession = null
+            return
+        }
         runCatching {
             spellCheckerSession?.close()
             val manager = getSystemService(Context.TEXT_SERVICES_MANAGER_SERVICE) as? TextServicesManager
@@ -344,7 +419,7 @@ class VoiceKeyboardService : InputMethodService() {
     }
 
     private fun refreshSuggestions() {
-        if (!isOfflineKeyboard || numberPage) {
+        if (!isOfflineKeyboard || numberPage || !suggestionsEnabled() || clipboardMode) {
             displaySuggestions(emptyList())
             return
         }
@@ -431,6 +506,345 @@ class VoiceKeyboardService : InputMethodService() {
         }
     }
 
+    private fun applyKeyboardPalette(view: View?) {
+        val dark = darkKeyboard()
+        val backgroundColor = if (dark) 0xFF191B22.toInt() else 0xFFE9ECF7.toInt()
+        val primaryText = if (dark) 0xFFF5F6F8.toInt() else 0xFF20232B.toInt()
+        val secondaryText = if (dark) 0xFFB4BAC6.toInt() else 0xFF555C6A.toInt()
+        view?.setBackgroundColor(backgroundColor)
+        statusView?.setTextColor(secondaryText)
+        languageButton?.setTextColor(if (dark) 0xFFA7F3D0.toInt() else 0xFF425A8A.toInt())
+        suggestionViews.forEach { it.setTextColor(primaryText) }
+        listOf(R.id.btnLanguage, R.id.btnOfflineKeyboard, R.id.btnClipboard, R.id.btnSettings, R.id.btnHideKeyboard)
+            .forEach { id ->
+                inputRoot?.findViewById<TextView>(id)?.apply {
+                    setTextColor(primaryText)
+                    background = GradientDrawable().apply {
+                        setColor(if (dark) 0xFF292D36.toInt() else 0xFFFFFFFF.toInt())
+                        cornerRadius = dp(10).toFloat()
+                    }
+                }
+            }
+        dictateButton?.apply {
+            setTextColor(if (dark) 0xFFA7F3D0.toInt() else 0xFF304E75.toInt())
+            background = GradientDrawable().apply {
+                setColor(if (dark) 0xFF164E42.toInt() else 0xFFDCE6FF.toInt())
+                cornerRadius = dp(12).toFloat()
+            }
+        }
+    }
+
+    private fun showKeyboardSettings() {
+        val prefs = keyboardPrefs
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(8), dp(20), dp(4))
+        }
+        val themeTitle = TextView(this).apply {
+            text = "Appearance"
+            textSize = 14f
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            setTextColor(if (darkKeyboard()) 0xFFF5F6F8.toInt() else 0xFF20232B.toInt())
+        }
+        content.addView(themeTitle)
+        val themeGroup = RadioGroup(this).apply { orientation = RadioGroup.HORIZONTAL }
+        val selectedTheme = prefs.getString("keyboard_theme", "system") ?: "system"
+        listOf("system" to "System", "light" to "Light", "dark" to "Dark").forEach { (value, label) ->
+            val radio = RadioButton(this).apply {
+                id = View.generateViewId()
+                tag = value
+                text = label
+                textSize = 13f
+                setTextColor(if (darkKeyboard()) 0xFFF5F6F8.toInt() else 0xFF20232B.toInt())
+                isChecked = value == selectedTheme
+                layoutParams = RadioGroup.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+            }
+            themeGroup.addView(radio)
+        }
+        content.addView(themeGroup)
+        val numberRow = CheckBox(this).apply {
+            text = "Show number row"
+            isChecked = numberRowEnabled()
+            setTextColor(if (darkKeyboard()) 0xFFF5F6F8.toInt() else 0xFF20232B.toInt())
+        }
+        content.addView(numberRow)
+        val suggestions = CheckBox(this).apply {
+            text = "Word suggestions (lightweight system spell checker)"
+            isChecked = suggestionsEnabled()
+            setTextColor(if (darkKeyboard()) 0xFFF5F6F8.toInt() else 0xFF20232B.toInt())
+        }
+        content.addView(suggestions)
+        val heightLabel = TextView(this).apply {
+            text = "Keyboard height: ${prefs.getInt("keyboard_height_percent", 100).coerceIn(80, 125)}%"
+            textSize = 14f
+            setTextColor(if (darkKeyboard()) 0xFFF5F6F8.toInt() else 0xFF20232B.toInt())
+            setPadding(0, dp(10), 0, 0)
+        }
+        content.addView(heightLabel)
+        val heightSeek = SeekBar(this).apply {
+            max = 45
+            progress = prefs.getInt("keyboard_height_percent", 100).coerceIn(80, 125) - 80
+        }
+        heightSeek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                heightLabel.text = "Keyboard height: ${progress + 80}%"
+            }
+            override fun onStartTrackingTouch(seekBar: SeekBar?) = Unit
+            override fun onStopTrackingTouch(seekBar: SeekBar?) = Unit
+        })
+        content.addView(heightSeek)
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("Keyboard settings")
+            .setView(content)
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Save") { _, _ ->
+                val theme = themeGroup.findViewById<RadioButton>(themeGroup.checkedRadioButtonId)?.tag as? String ?: "system"
+                prefs.edit()
+                    .putString("keyboard_theme", theme)
+                    .putBoolean("keyboard_number_row", numberRow.isChecked)
+                    .putBoolean("keyboard_suggestions_enabled", suggestions.isChecked)
+                    .putInt("keyboard_height_percent", heightSeek.progress + 80)
+                    .apply()
+                if (!suggestions.isChecked) {
+                    spellCheckerSession?.close()
+                    spellCheckerSession = null
+                    displaySuggestions(emptyList())
+                } else openSpellChecker()
+                applyKeyboardPalette(inputRoot)
+                renderQuickKeys()
+                renderOfflineKeys()
+                if (clipboardMode) renderClipboardItems()
+            }
+            .create()
+        dialog.show()
+    }
+
+    private fun loadClipboardEntries(): MutableList<ClipboardEntry> {
+        val raw = keyboardPrefs.getString("keyboard_clipboard_items", "[]").orEmpty()
+        val array = runCatching { JSONArray(raw) }.getOrElse { JSONArray() }
+        val result = mutableListOf<ClipboardEntry>()
+        for (index in 0 until array.length()) {
+            val item = runCatching { array.getJSONObject(index) }.getOrNull() ?: continue
+            result.add(
+                ClipboardEntry(
+                    id = item.optString("id"),
+                    text = item.optString("text").takeIf { it.isNotEmpty() },
+                    uri = item.optString("uri").takeIf { it.isNotEmpty() },
+                    mimeType = item.optString("mimeType").takeIf { it.isNotEmpty() },
+                    pinned = item.optBoolean("pinned", false),
+                    sourceUri = item.optString("sourceUri").takeIf { it.isNotEmpty() }
+                )
+            )
+        }
+        return result
+    }
+
+    private fun saveClipboardEntries(entries: List<ClipboardEntry>) {
+        val array = JSONArray()
+        entries.forEach { item ->
+            array.put(JSONObject()
+                .put("id", item.id)
+                .put("text", item.text ?: "")
+                .put("uri", item.uri ?: "")
+                .put("mimeType", item.mimeType ?: "")
+                .put("pinned", item.pinned)
+                .put("sourceUri", item.sourceUri ?: ""))
+        }
+        keyboardPrefs.edit().putString("keyboard_clipboard_items", array.toString()).apply()
+    }
+
+    private fun rememberClipboardItems() {
+        val clip = runCatching { (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).primaryClip }.getOrNull() ?: return
+        val entries = loadClipboardEntries()
+        val added = mutableListOf<ClipboardEntry>()
+        val mimeTypes = (0 until clip.description.mimeTypeCount).map { clip.description.getMimeType(it) }
+        val imageMime = mimeTypes.firstOrNull { it.startsWith("image/") }
+        for (i in 0 until minOf(clip.itemCount, 5)) {
+            val item = clip.getItemAt(i)
+            val text = runCatching { item.text?.toString() }.getOrNull()?.takeIf { it.isNotBlank() }
+            if (text != null) {
+                val id = "text:" + text.hashCode().toString()
+                added.add(ClipboardEntry(id = id, text = text.take(12000)))
+                continue
+            }
+            val source = item.uri ?: continue
+            val mime = imageMime ?: runCatching { contentResolver.getType(source) }.getOrNull() ?: continue
+            if (!mime.startsWith("image/")) continue
+            val sourceString = source.toString()
+            val previous = entries.firstOrNull { it.sourceUri == sourceString }
+            val savedUri = previous?.uri ?: cacheClipboardImage(source, mime)?.toString() ?: sourceString
+            added.add(ClipboardEntry(
+                id = "image:" + sourceString.hashCode().toString(),
+                uri = savedUri,
+                mimeType = mime,
+                pinned = previous?.pinned ?: false,
+                sourceUri = sourceString
+            ))
+        }
+        if (added.isEmpty()) return
+        val combined = (added + entries.filterNot { old -> added.any { it.id == old.id } }).distinctBy { it.id }
+        val pinned = combined.filter { it.pinned }
+        val recent = combined.filterNot { it.pinned }.take(20)
+        saveClipboardEntries((pinned + recent).take(40))
+    }
+
+    private fun cacheClipboardImage(source: Uri, mimeType: String): Uri? {
+        return runCatching {
+            val directory = File(cacheDir, "keyboard_clips").apply { mkdirs() }
+            val extension = when (mimeType.substringAfter("/", "")) {
+                "jpeg" -> ".jpg"
+                "png" -> ".png"
+                "webp" -> ".webp"
+                "gif" -> ".gif"
+                else -> ".img"
+            }
+            val file = File(directory, "clip_${System.currentTimeMillis()}$extension")
+            contentResolver.openInputStream(source)?.use { input ->
+                FileOutputStream(file).use { output ->
+                    val buffer = ByteArray(8192)
+                    var total = 0
+                    while (true) {
+                        val count = input.read(buffer)
+                        if (count <= 0) break
+                        total += count
+                        if (total > 12 * 1024 * 1024) throw IllegalStateException("Clipboard image is larger than 12 MB")
+                        output.write(buffer, 0, count)
+                    }
+                }
+            } ?: return null
+            FileProvider.getUriForFile(this, "$packageName.keyboardfiles", file)
+        }.getOrNull()
+    }
+
+    private fun renderClipboardItems() {
+        val host = clipboardContainer ?: return
+        host.removeAllViews()
+        val entries = loadClipboardEntries()
+        if (entries.isEmpty()) {
+            val empty = TextView(this).apply {
+                text = "Copy text or an image, then open Clipboard."
+                textSize = 13f
+                gravity = Gravity.CENTER
+                setTextColor(if (darkKeyboard()) 0xFFB4BAC6.toInt() else 0xFF555C6A.toInt())
+                layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(100))
+            }
+            host.addView(empty)
+            return
+        }
+        entries.forEach { entry ->
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(8), dp(4), dp(4), dp(4))
+                background = GradientDrawable().apply {
+                    setColor(if (darkKeyboard()) 0xFF292D36.toInt() else 0xFFFFFFFF.toInt())
+                    cornerRadius = dp(10).toFloat()
+                }
+                layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(50)).apply {
+                    bottomMargin = dp(5)
+                }
+            }
+            val label = TextView(this).apply {
+                text = entry.text?.replace("\n", " ") ?: "Image · tap to paste"
+                maxLines = 2
+                ellipsize = android.text.TextUtils.TruncateAt.END
+                textSize = 13f
+                gravity = Gravity.CENTER_VERTICAL
+                setTextColor(if (darkKeyboard()) 0xFFF5F6F8.toInt() else 0xFF20232B.toInt())
+                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f)
+                setOnClickListener { pasteClipboardEntry(entry) }
+            }
+            val pin = TextView(this).apply {
+                text = if (entry.pinned) "★" else "☆"
+                textSize = 19f
+                gravity = Gravity.CENTER
+                setTextColor(if (darkKeyboard()) 0xFFA7F3D0.toInt() else 0xFF425A8A.toInt())
+                layoutParams = LinearLayout.LayoutParams(dp(36), ViewGroup.LayoutParams.MATCH_PARENT)
+                contentDescription = if (entry.pinned) "Unpin clipboard item" else "Pin clipboard item"
+                setOnClickListener {
+                    val current = loadClipboardEntries()
+                    saveClipboardEntries(current.map { if (it.id == entry.id) it.copy(pinned = !it.pinned) else it })
+                    renderClipboardItems()
+                }
+            }
+            val remove = TextView(this).apply {
+                text = "×"
+                textSize = 21f
+                gravity = Gravity.CENTER
+                setTextColor(if (darkKeyboard()) 0xFFFFB4AB.toInt() else 0xFF9D2933.toInt())
+                layoutParams = LinearLayout.LayoutParams(dp(32), ViewGroup.LayoutParams.MATCH_PARENT)
+                contentDescription = "Remove clipboard item"
+                setOnClickListener {
+                    saveClipboardEntries(loadClipboardEntries().filterNot { it.id == entry.id })
+                    renderClipboardItems()
+                }
+            }
+            row.addView(label)
+            row.addView(pin)
+            row.addView(remove)
+            host.addView(row)
+        }
+    }
+
+    private fun pasteClipboardEntry(entry: ClipboardEntry) {
+        val connection = currentInputConnection ?: return
+        if (entry.text != null) {
+            connection.commitText(entry.text, 1)
+            showStatus("Pasted text")
+            showOfflineKeyboard(true)
+            return
+        }
+        val rawUri = entry.uri ?: return
+        val uri = Uri.parse(rawUri)
+        val mime = entry.mimeType ?: runCatching { contentResolver.getType(uri) }.getOrNull() ?: "image/*"
+        val content = InputContentInfo(uri, ClipDescription("Clipboard image", arrayOf(mime)), null)
+        val accepted = runCatching {
+            connection.commitContent(content, InputConnection.INPUT_CONTENT_GRANT_READ_URI_PERMISSION, null)
+        }.getOrDefault(false)
+        if (accepted) {
+            showStatus("Pasted image")
+            showOfflineKeyboard(true)
+        } else showStatus("This text field cannot accept images")
+    }
+
+    private fun installSpaceCursorGesture(view: View) {
+        var startX = 0f
+        var startY = 0f
+        var moved = false
+        var lastSteps = 0
+        view.setOnTouchListener { _, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    startX = event.rawX
+                    startY = event.rawY
+                    moved = false
+                    lastSteps = 0
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val dx = event.rawX - startX
+                    if (abs(dx) > dp(18) && abs(dx) > abs(event.rawY - startY)) {
+                        moved = true
+                        val steps = (dx / dp(28).coerceAtLeast(1)).toInt()
+                        val delta = steps - lastSteps
+                        if (delta != 0) {
+                            val keyCode = if (delta < 0) android.view.KeyEvent.KEYCODE_DPAD_LEFT else android.view.KeyEvent.KEYCODE_DPAD_RIGHT
+                            repeat(abs(delta).coerceAtMost(8)) { sendDownUpKeyEvents(keyCode) }
+                            lastSteps = steps
+                        }
+                    }
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    if (!moved) commit(" ")
+                    true
+                }
+                MotionEvent.ACTION_CANCEL -> true
+                else -> true
+            }
+        }
+    }
+
     private fun customizeKeys() {
         val input = EditText(this).apply {
             setText(SecurePrefs.get(this@VoiceKeyboardService).getString("voice_custom_keys", "").orEmpty())
@@ -454,11 +868,29 @@ class VoiceKeyboardService : InputMethodService() {
             text = label
             gravity = Gravity.CENTER
             textSize = when { label.length > 5 -> 11f; label.length > 2 -> 13f; else -> 17f }
-            setTextColor(if (primary) 0xFF202B34.toInt() else Color.WHITE)
+            val dark = darkKeyboard()
+            val fill = when {
+                primary && dark -> 0xFFBDEDDD.toInt()
+                primary -> 0xFFDCE6FF.toInt()
+                dark -> 0xFF303641.toInt()
+                else -> 0xFFFFFFFF.toInt()
+            }
+            val foreground = when {
+                primary && dark -> 0xFF202B34.toInt()
+                primary -> 0xFF26344D.toInt()
+                dark -> Color.WHITE
+                else -> 0xFF20232B.toInt()
+            }
+            setTextColor(foreground)
             background = GradientDrawable().apply {
-                setColor(if (primary) 0xFFBDEDDD.toInt() else 0xFF303641.toInt())
-                cornerRadius = dp(6).toFloat()
-                setStroke(dp(1), if (primary) 0xFFBDEDDD.toInt() else 0xFF454D58.toInt())
+                setColor(fill)
+                cornerRadius = dp(if (dark) 7 else 8).toFloat()
+                setStroke(dp(1), when {
+                    primary && dark -> 0xFFBDEDDD.toInt()
+                    primary -> 0xFFDCE6FF.toInt()
+                    dark -> 0xFF454D58.toInt()
+                    else -> 0xFFE4E7EF.toInt()
+                })
             }
             elevation = dp(1).toFloat()
             isClickable = true; isFocusable = true
@@ -469,7 +901,7 @@ class VoiceKeyboardService : InputMethodService() {
                 offlineLanguage == "HI" -> 34
                 else -> 36
             }
-            layoutParams = LinearLayout.LayoutParams(0, dp(keyHeight), weight).apply { marginStart = dp(2); marginEnd = dp(2) }
+            layoutParams = LinearLayout.LayoutParams(0, dp((keyHeight * keyboardScale()).toInt()), weight).apply { marginStart = dp(2); marginEnd = dp(2) }
         }
 
     private fun commit(text: String) {
@@ -507,6 +939,7 @@ class VoiceKeyboardService : InputMethodService() {
 
     override fun onStartInputView(info: android.view.inputmethod.EditorInfo?, restarting: Boolean) {
         super.onStartInputView(info, restarting)
+        rememberClipboardItems()
         if (isOfflineKeyboard) {
             openSpellChecker()
             refreshSuggestions()
