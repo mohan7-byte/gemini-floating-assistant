@@ -266,17 +266,21 @@ class VoiceKeyboardService : InputMethodService() {
     private fun showOfflineKeyboard(show: Boolean) {
         isOfflineKeyboard = show
         clipboardMode = false
+        settingsMode = false
         voicePanel?.visibility = if (show) View.GONE else View.VISIBLE
         offlinePanel?.visibility = if (show) View.VISIBLE else View.GONE
         keyboardContainer?.visibility = if (show) View.VISIBLE else View.GONE
         clipboardContainer?.visibility = View.GONE
         clipboardScroll?.visibility = View.GONE
+        settingsScroll?.visibility = View.GONE
+        settingsActions?.visibility = View.GONE
         inputRoot?.findViewById<View>(R.id.suggestionContainer)?.visibility =
             if (show && suggestionsEnabled() && !numberPage && !sensitiveInput) View.VISIBLE else View.GONE
         val toggle = inputRoot?.findViewById<TextView>(R.id.btnOfflineKeyboard)
         toggle?.text = if (show) "🎙" else "⌨"
-        toggle?.contentDescription = if (show) "Switch to Gemini Live voice typing" else "Switch to keyboard"
-        languageButton?.text = offlineLanguage
+        toggle?.contentDescription = if (show) "Switch to voice mode" else "Switch to keyboard"
+        languageButton?.text = "🌐"
+        languageButton?.contentDescription = "Current language: $offlineLanguage. Tap to switch."
         if (show) {
             stopDictation()
             openSpellChecker()
@@ -300,15 +304,170 @@ class VoiceKeyboardService : InputMethodService() {
         stopDictation()
         isOfflineKeyboard = true
         clipboardMode = true
+        settingsMode = false
         voicePanel?.visibility = View.GONE
         offlinePanel?.visibility = View.VISIBLE
         keyboardContainer?.visibility = View.GONE
         inputRoot?.findViewById<View>(R.id.suggestionContainer)?.visibility = View.GONE
+        settingsScroll?.visibility = View.GONE
+        settingsActions?.visibility = View.GONE
         clipboardContainer?.visibility = View.VISIBLE
         clipboardScroll?.visibility = View.VISIBLE
         renderClipboardItems()
         showStatus("Clipboard")
         applyKeyboardPalette(inputRoot)
+    }
+
+    private fun showKeyboardSettings() {
+        stopDictation()
+        isOfflineKeyboard = true
+        clipboardMode = false
+        settingsMode = true
+        voicePanel?.visibility = View.GONE
+        offlinePanel?.visibility = View.VISIBLE
+        keyboardContainer?.visibility = View.GONE
+        inputRoot?.findViewById<View>(R.id.suggestionContainer)?.visibility = View.GONE
+        clipboardContainer?.visibility = View.GONE
+        clipboardScroll?.visibility = View.GONE
+        settingsScroll?.visibility = View.VISIBLE
+        settingsActions?.visibility = View.VISIBLE
+        renderSettingsPanel()
+        showStatus("Keyboard settings")
+        applyKeyboardPalette(inputRoot)
+    }
+
+    private fun renderSettingsPanel() {
+        val container = settingsContainer ?: return
+        container.removeAllViews()
+        val dark = darkKeyboard()
+        val foreground = if (dark) 0xFFF5F6F8.toInt() else 0xFF20232B.toInt()
+        val secondary = if (dark) 0xFFB4BAC6.toInt() else 0xFF555C6A.toInt()
+        val surface = if (dark) 0xFF292D36.toInt() else 0xFFFFFFFF.toInt()
+
+        fun label(text: String, primary: Boolean = false): TextView = TextView(this).apply {
+            this.text = text
+            textSize = if (primary) 15f else 12f
+            setTextColor(if (primary) foreground else secondary)
+            if (primary) setTypeface(typeface, android.graphics.Typeface.BOLD)
+            setPadding(0, dp(if (primary) 10 else 3), 0, dp(5))
+        }
+
+        container.addView(label("Appearance", true))
+        val themeGroup = RadioGroup(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val selectedTheme = keyboardPrefs.getString("keyboard_theme", "system") ?: "system"
+        listOf("system" to "System", "light" to "Light", "dark" to "Dark").forEach { (value, caption) ->
+            val radio = RadioButton(this).apply {
+                id = View.generateViewId()
+                tag = value
+                text = caption
+                textSize = 13f
+                setTextColor(foreground)
+                isChecked = value == selectedTheme
+                layoutParams = RadioGroup.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+            }
+            themeGroup.addView(radio)
+        }
+        settingsThemeGroup = themeGroup
+        container.addView(themeGroup)
+
+        val numberRow = CheckBox(this).apply {
+            text = "Show number row"
+            textSize = 13f
+            setTextColor(foreground)
+            isChecked = numberRowEnabled()
+        }
+        settingsNumberRow = numberRow
+        container.addView(numberRow)
+
+        val suggestions = CheckBox(this).apply {
+            text = "Word suggestions"
+            textSize = 13f
+            setTextColor(foreground)
+            isChecked = suggestionsEnabled()
+        }
+        settingsSuggestions = suggestions
+        container.addView(suggestions)
+        container.addView(label("Suggestions work offline. Android's spell checker is used when available.", false))
+
+        container.addView(label("Keyboard height", true))
+        val heightLabel = label("Height: ${keyboardPrefs.getInt("keyboard_height_percent", 100).coerceIn(80, 125)}%", false)
+        settingsHeightLabel = heightLabel
+        container.addView(heightLabel)
+        val heightSeek = SeekBar(this).apply {
+            max = 45
+            progress = keyboardPrefs.getInt("keyboard_height_percent", 100).coerceIn(80, 125) - 80
+            progressTintList = ColorStateList.valueOf(if (dark) 0xFFA7F3D0.toInt() else 0xFF6D87C5.toInt())
+            thumbTintList = progressTintList
+        }
+        heightSeek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                heightLabel.text = "Height: ${progress + 80}%"
+            }
+            override fun onStartTrackingTouch(seekBar: SeekBar?) = Unit
+            override fun onStopTrackingTouch(seekBar: SeekBar?) = Unit
+        })
+        settingsHeightSeek = heightSeek
+        container.addView(heightSeek)
+
+        container.addView(label("Custom quick keys", true))
+        container.addView(label("Add up to 6 shortcuts, separated by commas.", false))
+        val customKeys = EditText(this).apply {
+            setText(keyboardPrefs.getString("voice_custom_keys", "").orEmpty())
+            hint = "@, #, ₹"
+            textSize = 14f
+            setSingleLine(true)
+            setTextColor(foreground)
+            setHintTextColor(secondary)
+            setPadding(dp(10), dp(8), dp(10), dp(8))
+            background = GradientDrawable().apply {
+                setColor(surface)
+                cornerRadius = dp(9).toFloat()
+                setStroke(dp(1), if (dark) 0xFF454D58.toInt() else 0xFFE0E4ED.toInt())
+            }
+        }
+        settingsCustomKeys = customKeys
+        container.addView(customKeys, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(42)
+        ))
+    }
+
+    private fun saveKeyboardSettings() {
+        val theme = settingsThemeGroup
+            ?.findViewById<RadioButton>(settingsThemeGroup?.checkedRadioButtonId ?: View.NO_ID)
+            ?.tag as? String ?: "system"
+        val customKeys = settingsCustomKeys?.text?.toString().orEmpty()
+            .split(",").map { it.trim() }.filter { it.isNotEmpty() }.take(6)
+        keyboardPrefs.edit()
+            .putString("keyboard_theme", theme)
+            .putBoolean("keyboard_number_row", settingsNumberRow?.isChecked ?: true)
+            .putBoolean("keyboard_suggestions_enabled", settingsSuggestions?.isChecked ?: true)
+            .putInt("keyboard_height_percent", (settingsHeightSeek?.progress ?: 20) + 80)
+            .putString("voice_custom_keys", customKeys.joinToString(","))
+            .apply()
+        if (suggestionsEnabled()) openSpellChecker() else {
+            spellCheckerSession?.close()
+            spellCheckerSession = null
+            displaySuggestions(emptyList())
+        }
+        applyKeyboardPalette(inputRoot)
+        renderQuickKeys()
+        renderOfflineKeys()
+        showOfflineKeyboard(true)
+    }
+
+    private fun cycleKeyboardTheme() {
+        val current = keyboardPrefs.getString("keyboard_theme", "system") ?: "system"
+        val next = when (current) {
+            "system" -> "light"
+            "light" -> "dark"
+            else -> "system"
+        }
+        keyboardPrefs.edit().putString("keyboard_theme", next).apply()
+        showStatus("Theme: ${next.replaceFirstChar { it.uppercase() }}")
+        applyKeyboardPalette(inputRoot)
+        renderQuickKeys()
+        renderOfflineKeys()
+        inputRoot?.findViewById<TextView>(R.id.btnTheme)?.contentDescription = "Keyboard theme: $next. Tap to cycle."
     }
 
     private fun switchLanguage() {
