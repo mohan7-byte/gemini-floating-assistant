@@ -503,6 +503,7 @@ class VoiceKeyboardService : InputMethodService() {
         applyKeyboardPalette(inputRoot)
         renderQuickKeys()
         renderOfflineKeys()
+        if (settingsMode) renderSettingsPanel()
         inputRoot?.findViewById<TextView>(R.id.btnTheme)?.contentDescription = "Keyboard theme: $next. Tap to cycle."
     }
 
@@ -835,6 +836,17 @@ class VoiceKeyboardService : InputMethodService() {
                 cornerRadius = dp(12).toFloat()
             }
         }
+        inputRoot?.findViewById<TextView>(R.id.btnCancelKeyboardSettings)?.apply {
+            setTextColor(primaryText)
+            background = GradientDrawable().apply { setColor(backgroundColor) }
+        }
+        inputRoot?.findViewById<TextView>(R.id.btnSaveKeyboardSettings)?.apply {
+            setTextColor(if (dark) 0xFFA7F3D0.toInt() else 0xFF263F69.toInt())
+            background = GradientDrawable().apply {
+                setColor(if (dark) 0xFF164E42.toInt() else 0xFFDCE6FF.toInt())
+                cornerRadius = dp(10).toFloat()
+            }
+        }
     }
 
     private fun loadClipboardEntries(): MutableList<ClipboardEntry> {
@@ -869,6 +881,14 @@ class VoiceKeyboardService : InputMethodService() {
                 .put("sourceUri", item.sourceUri ?: ""))
         }
         keyboardPrefs.edit().putString("keyboard_clipboard_items", array.toString()).apply()
+        val directory = File(filesDir, "keyboard_clips")
+        if (directory.exists()) {
+            val retained = entries.mapNotNull { entry ->
+                val uri = entry.uri?.let(Uri::parse) ?: return@mapNotNull null
+                if (uri.authority == "$packageName.keyboardfiles") uri.lastPathSegment else null
+            }.toSet()
+            directory.listFiles()?.forEach { file -> if (file.name !in retained) file.delete() }
+        }
     }
 
     private fun rememberClipboardItems() {
@@ -910,7 +930,8 @@ class VoiceKeyboardService : InputMethodService() {
 
     private fun cacheClipboardImage(source: Uri, mimeType: String): Uri? {
         return runCatching {
-            val directory = File(cacheDir, "keyboard_clips").apply { mkdirs() }
+            // Keep stored clipboard images across app restarts; removing a clip deletes its file.
+            val directory = File(filesDir, "keyboard_clips").apply { mkdirs() }
             val extension = when (mimeType.substringAfter("/", "")) {
                 "jpeg" -> ".jpg"
                 "png" -> ".png"
@@ -1175,7 +1196,15 @@ class VoiceKeyboardService : InputMethodService() {
     private fun installDummy() = Unit
     private fun matchWrap() = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
-    private fun showStatus(message: String) { mainHandler.post { statusView?.text = message } }
+    private fun showStatus(message: String) {
+        mainHandler.post {
+            statusView?.text = message
+            statusView?.contentDescription = message
+            inputRoot?.findViewById<TextView>(R.id.btnMic)?.let { mic ->
+                if (!recording) mic.contentDescription = if (isOfflineKeyboard) "Start Gemini Live dictation" else "Start Gemini Live dictation from keyboard"
+            }
+        }
+    }
 
     override fun onStartInputView(info: android.view.inputmethod.EditorInfo?, restarting: Boolean) {
         super.onStartInputView(info, restarting)
