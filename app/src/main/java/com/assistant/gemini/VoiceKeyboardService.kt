@@ -128,8 +128,38 @@ class VoiceKeyboardService : InputMethodService() {
         tomorrow yesterday now today keyboard typing suggestion suggestions system theme settings clipboard
         image picture delete remove pin pinned save cancel light dark english hindi language sentence
         android app open close start stop copy paste text number symbol space enter backspace shift
-        faster reliable lightweight personal assistant because need want help make feel looks looks
+        faster reliable lightweight personal assistant because need want help make feel looks
         design modern nice beautiful better best test build failed fixed working works supported
+        accept accepted access account across action active actually add address after ahead allow almost
+        alone along already although always among amount answer appear apple area around arrive ask asked
+        asking asleep attention audio available avoid baby bad balance bank basic beach become began begin
+        beginning believe best better between bill bit block body book both break bring broken brother
+        budget business buy camera care careful carry case catch cause center certain chance change chat
+        cheap check city class clean clear click clock cloud code color colour comfortable command comment
+        complete computer connect connection continue control correct cost country create credit customer
+        data date decide deep describe device dictionary dinner direction display document download drive
+        earlier earth education email emotion employee energy engine enjoy enter entire error evening event
+        exact excellent explain extra eye face fall father feature feel feeling file fill final finance finish
+        fit food foot forget form free friend front fruit fun future game garden general generate get gift
+        goal gold gone grand great green guess half hand happen happy hard hate health hear heart heavy hello
+        history holiday hope hour human hundred hungry idea important improve industry information input
+        install instant internet interview introduce issue item job join journey jump key keyboard know
+        language laptop last launch lawyer lead leave lesson letter level library listen little local loved
+        machine main maintain manager manner market matter maximum maybe meal measure meeting message middle
+        minute mobile model moment month morning mother mountain music myself nation natural necessary network
+        nice normal notice offer office offline okay online option order original output owner package paper
+        parent park password pattern payment percent phone photo piece place picture pilot pink plan platform
+        player please plenty pocket policy position possible power practice prefer prepare present price primary
+        private process product program project protect provide public purpose push quality question queue quick
+        quiet quite radio rain range rate reach ready reason receive recent record reduce reference refresh region
+        reliable remember repeat reply report request research resource respect rest result review reward right
+        role room rule safe sample save screen search season second secret section select self send service session
+        share sheet short show signal similar skill sleep slow smart smile social software solid solution someone
+        source special speed spend spring stand start state station stay step still story strategy street strong
+        study subject success summer support sure switch table take task team technology temperature thank thing
+        ticket time title touch traffic train travel treat trend true trust try type understand update useful usual
+        value video view visit wait wake walk wallet watch water weather welcome window winter woman women wonder
+        word work worker write wrong yesterday young yourself you're can't don't won't it's i've we're they're
     """.trimIndent().split(Regex("\\s+")).distinct()
 
     private val offlineHindiWords = """
@@ -797,32 +827,136 @@ class VoiceKeyboardService : InputMethodService() {
         return before.takeLastWhile(::isWordCharacter)
     }
 
+    private fun loadLearnedEnglishWords(): LinkedHashMap<String, Int> {
+        learnedEnglishWordsCache?.let { return it }
+        val words = linkedMapOf<String, Int>()
+        val raw = keyboardPrefs.getString("keyboard_learned_english_words", "{}").orEmpty()
+        runCatching { JSONObject(raw) }.getOrNull()?.let { objectValue ->
+            val iterator = objectValue.keys()
+            while (iterator.hasNext()) {
+                val word = iterator.next().lowercase(Locale.ROOT)
+                val frequency = objectValue.optInt(word, 0)
+                if (word.matches(Regex("[a-z][a-z'-]{1,31}")) && frequency > 0) words[word] = frequency
+            }
+        }
+        learnedEnglishWordsCache = words
+        return words
+    }
+
+    private fun persistLearnedEnglishWords(words: Map<String, Int>) {
+        val json = JSONObject()
+        words.forEach { (word, frequency) -> json.put(word, frequency) }
+        keyboardPrefs.edit().putString("keyboard_learned_english_words", json.toString()).apply()
+        learnedEnglishWordsCache = LinkedHashMap(words)
+    }
+
+    private fun clearLearnedEnglishWords() {
+        keyboardPrefs.edit().remove("keyboard_learned_english_words").apply()
+        learnedEnglishWordsCache = linkedMapOf()
+        refreshSuggestions()
+        showStatus("Learned English words cleared")
+    }
+
+    private fun storeLearnedEnglishWord(rawWord: String) {
+        if (!autoLearnEnglishEnabled() || offlineLanguage != "EN" || sensitiveInput) return
+        val word = rawWord.trim().lowercase(Locale.ROOT)
+        if (word.length !in 2..32 || !word.matches(Regex("[a-z][a-z'-]*"))) return
+        val words = loadLearnedEnglishWords()
+        words[word] = (words[word] ?: 0) + 1
+        if (words.size > 500) {
+            words.entries.sortedBy { it.value }.take(words.size - 500).forEach { words.remove(it.key) }
+        }
+        persistLearnedEnglishWords(words)
+    }
+
+    private fun learnCompletedEnglishWordIfEnabled(separator: String) {
+        if (separator.none { it.isWhitespace() || it in ".,!?;:" }) return
+        val before = currentInputConnection?.getTextBeforeCursor(48, 0)?.toString().orEmpty()
+        val word = before.takeLastWhile { it.isLetter() || it == '-' || it.code == 39 }
+        storeLearnedEnglishWord(word)
+    }
+
+    private fun oneEditAway(a: String, b: String): Boolean {
+        if (kotlin.math.abs(a.length - b.length) > 1 || a == b) return false
+        if (a.length == b.length) {
+            val mismatch = a.indices.filter { a[it] != b[it] }
+            if (mismatch.size == 1) return true
+            return mismatch.size == 2 &&
+                mismatch[1] == mismatch[0] + 1 &&
+                a[mismatch[0]] == b[mismatch[1]] &&
+                a[mismatch[1]] == b[mismatch[0]]
+        }
+        val shorter = if (a.length < b.length) a else b
+        val longer = if (a.length < b.length) b else a
+        var i = 0
+        var j = 0
+        var edits = 0
+        while (i < shorter.length && j < longer.length) {
+            if (shorter[i] == longer[j]) {
+                i++
+                j++
+            } else {
+                edits++
+                j++
+                if (edits > 1) return false
+            }
+        }
+        return true
+    }
+
     private fun offlineSuggestions(word: String): List<String> {
         if (word.isBlank()) return emptyList()
         val english = offlineLanguage == "EN"
         val normalized = if (english) word.lowercase(Locale.ROOT) else word
         val vocabulary = if (english) offlineEnglishWords else offlineHindiWords
-        val exact = vocabulary.firstOrNull { if (english) it.equals(normalized, ignoreCase = true) else it == normalized }
-        val prefixMatches = vocabulary.asSequence()
-            .filter { candidate ->
-                if (english) candidate.startsWith(normalized, ignoreCase = true) else candidate.startsWith(normalized)
-            }
-            .take(8)
-            .map { candidate ->
-                if (english && word.firstOrNull()?.isUpperCase() == true) {
-                    candidate.replaceFirstChar { it.titlecase(Locale.ROOT) }
-                } else candidate
-            }
-            .toList()
-        val results = mutableListOf<String>()
-        if (exact != null) {
-            results.add(if (english && word.firstOrNull()?.isUpperCase() == true) {
-                exact.replaceFirstChar { it.titlecase(Locale.ROOT) }
-            } else exact)
+        val learned = if (english) loadLearnedEnglishWords() else linkedMapOf()
+        val ranked = linkedMapOf<String, Int>()
+
+        fun add(candidate: String, score: Int) {
+            if (candidate.isBlank() || candidate.equals(word, ignoreCase = english)) return
+            val currentScore = ranked[candidate]
+            if (currentScore == null || score < currentScore) ranked[candidate] = score
         }
-        results.addAll(prefixMatches.filterNot { if (english) it.equals(word, ignoreCase = true) else it == word })
-        if (results.isEmpty()) results.add(word)
-        return results.distinct().take(3)
+
+        learned.entries.asSequence()
+            .filter { it.key.startsWith(normalized, ignoreCase = true) && it.key != normalized }
+            .sortedByDescending { it.value }
+            .take(12)
+            .forEach { entry -> add(matchCase(entry.key, word, english), -1000 - entry.value) }
+
+        vocabulary.firstOrNull { it.equals(normalized, ignoreCase = english) }?.let {
+            add(matchCase(it, word, english), -500)
+        }
+
+        vocabulary.asSequence()
+            .filter { if (english) it.startsWith(normalized, ignoreCase = true) else it.startsWith(normalized) }
+            .take(30)
+            .forEachIndexed { index, candidate ->
+                val learnedCount = learned[candidate.lowercase(Locale.ROOT)] ?: 0
+                add(matchCase(candidate, word, english), index - learnedCount)
+            }
+
+        // A bounded one-edit check improves likely typos without a heavyweight model or network call.
+        if (english && normalized.length in 3..18) {
+            vocabulary.asSequence()
+                .filter { it.length in 3..18 && oneEditAway(normalized, it.lowercase(Locale.ROOT)) }
+                .take(24)
+                .forEach { candidate ->
+                    add(matchCase(candidate, word, true), 100 - (learned[candidate.lowercase(Locale.ROOT)] ?: 0))
+                }
+            learned.entries.asSequence()
+                .filter { it.key.length in 3..32 && oneEditAway(normalized, it.key) }
+                .take(16)
+                .forEach { add(matchCase(it.key, word, true), 80 - it.value) }
+        }
+        val result = ranked.entries.sortedBy { it.value }.map { it.key }.distinct().take(3)
+        return if (result.isEmpty()) listOf(word) else result
+    }
+
+    private fun matchCase(candidate: String, typed: String, english: Boolean): String {
+        return if (english && typed.firstOrNull()?.isUpperCase() == true) {
+            candidate.replaceFirstChar { it.titlecase(Locale.ROOT) }
+        } else candidate
     }
 
     private fun refreshSuggestions() {
@@ -863,6 +997,7 @@ class VoiceKeyboardService : InputMethodService() {
         val word = currentWord()
         if (word.isBlank()) return
         ic.deleteSurroundingText(word.length, 0)
+        storeLearnedEnglishWord(suggestion)
         ic.commitText("$suggestion ", 1)
         refreshSuggestions()
     }
@@ -1350,6 +1485,7 @@ class VoiceKeyboardService : InputMethodService() {
         }
 
     private fun commit(text: String) {
+        learnCompletedEnglishWordIfEnabled(text)
         currentInputConnection?.commitText(text, 1)
         refreshSuggestions()
     }
@@ -1375,6 +1511,7 @@ class VoiceKeyboardService : InputMethodService() {
         refreshSuggestions()
     }
     private fun enterKey() {
+        learnCompletedEnglishWordIfEnabled("\n")
         if (!sendDefaultEditorAction(true)) sendDownUpKeyEvents(android.view.KeyEvent.KEYCODE_ENTER)
     }
     private fun installDummy() = Unit
