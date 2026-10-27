@@ -318,7 +318,7 @@ class VoiceKeyboardService : InputMethodService() {
         val baseRows: List<List<String>> = when {
             numberPage -> listOf(
                 listOf("1","2","3","4","5","6","7","8","9","0"),
-                listOf("@","#","$","%","&","-","+","(",")"),
+                listOf("@","#","\$","%","&","-","+","(",")"),
                 listOf("*","\"","'",";",":","!","?","⌫"),
                 listOf("ABC","\\","=","Space",".",",","↵")
             )
@@ -847,7 +847,7 @@ class VoiceKeyboardService : InputMethodService() {
         "p" -> "}"
         "a" -> "@"
         "s" -> "#"
-        "d" -> "$"
+        "d" -> "\$"
         "f" -> "-"
         "g" -> "&"
         "h" -> "_"
@@ -855,7 +855,7 @@ class VoiceKeyboardService : InputMethodService() {
         "k" -> "("
         "l" -> ")"
         "z" -> "*"
-        "x" -> "`"
+        "x" -> "\""
         "c" -> "'"
         "v" -> ":"
         "b" -> ";"
