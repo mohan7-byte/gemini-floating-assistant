@@ -220,8 +220,11 @@ class VoiceKeyboardService : InputMethodService() {
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ))
             onSwipeDown = {
-                stopDictation()
-                requestHideSelf(0)
+                // Scrollable panels must remain scrollable; swipe-to-hide applies to the typing view.
+                if (!clipboardMode && !settingsMode) {
+                    stopDictation()
+                    requestHideSelf(0)
+                }
             }
         }
     }
